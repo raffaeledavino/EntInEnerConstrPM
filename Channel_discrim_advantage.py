@@ -12,80 +12,6 @@ from utils import *
 # =============================================================================
 
 
-def setNumericalPrecisionForSolver(problem):
-    """
-    Sets high numerical precision parameters for PICOS solvers.
-    """
-    problem.options["rel_ipm_opt_tol"] = 1e-12
-    problem.options["rel_prim_fsb_tol"] = 1e-12
-    problem.options["rel_dual_fsb_tol"] = 1e-12
-    problem.options["max_footprints"] = None
-    
-    
-def diamond_norm_distance(choi_E):
-    """
-    Compute the diamond-norm distance between a given channel and the identity.
-
-    Parameters
-    ----------
-    choi_E : np.ndarray
-        Choi matrix of the quantum channel.
-
-    Returns
-    -------
-    float
-        Diamond norm distance / 2.
-    np.ndarray
-        Optimal auxiliary state sigma achieving the maximum.
-    """
-    dim = 2  # Qubit system
-    I_choi = np.array([[1, 0, 0, 1],
-                       [0, 0, 0, 0],
-                       [0, 0, 0, 0],
-                       [1, 0, 0, 1]])
-    J_delta = I_choi - choi_E
-
-    prob = pic.Problem()
-    Y = pic.HermitianVariable("Y", (dim**2, dim**2))
-    sigma = pic.HermitianVariable("sigma", (dim, dim))
-    prob.add_constraint(pic.trace(sigma) == 1)
-    prob.add_constraint(sigma >> 0)
-
-    J_param = pic.Constant("J_delta", J_delta)
-    I_d = pic.Constant("I_d", np.eye(dim))
-
-    prob.set_objective("max", pic.trace(Y * J_param))
-    prob.add_constraint(-dim * (I_d @ sigma) << Y)
-    prob.add_constraint(Y << dim * (I_d @ sigma))
-
-    setNumericalPrecisionForSolver(prob)
-    prob.solve(solver="mosek")
-
-    return 0.5 * prob.value, sigma.value
-
-
-def trace_distance(rho, sigma):
-    """
-    Compute the trace distance between two density matrices.
-    """
-    diff = rho - sigma
-    singular_values = np.linalg.svd(diff.full(), compute_uv=False)
-    return 0.5 * np.sum(singular_values)
-
-
-def choi_matrix(kraus_ops):
-    """
-    Compute the Choi matrix of a quantum channel given its Kraus operators.
-    """
-    d = 2
-    phi_plus = np.eye(d).flatten()
-    J = np.zeros((d**2, d**2), dtype=complex)
-    for K in kraus_ops:
-        K_ext = np.kron(K, np.eye(d))
-        J += K_ext @ np.outer(phi_plus, phi_plus) @ K_ext.conj().T
-    return J
-
-
 def random_qubit_state():
     """
     Generate a random qubit pure state as a density matrix.
@@ -94,40 +20,6 @@ def random_qubit_state():
     psi /= np.linalg.norm(psi)
     return np.outer(psi, psi.conj())
 
-
-def induced_norm_distance_seesaw1(k1, k2, rho):
-    """
-    First step of the seesaw optimization for the induced trace norm.
-    Maximize over Y given a fixed state rho.
-    """
-    d = 2
-    prob = pic.Problem()
-    Lambda_rho = k1 @ rho @ k1.conj().T + k2 @ rho @ k2.conj().T - rho
-    Lambda_rho_pic = pic.Constant('Lambda_rho', Lambda_rho)
-    I_pic = pic.Constant("I", np.identity(d))
-    Y = pic.HermitianVariable("Y", (d, d))
-    prob.set_objective("max", pic.trace(Y * Lambda_rho_pic).real)
-    prob.add_constraint(Y - I_pic << 0)
-    prob.add_constraint(Y >> 0)
-    prob.solve()
-    return prob.value, Y.value
-
-
-def induced_norm_distance_seesaw2(k1, k2, Y):
-    """
-    Second step of the seesaw optimization for the induced trace norm.
-    Maximize over rho given a fixed operator Y.
-    """
-    d = 2
-    prob = pic.Problem()
-    rho = pic.HermitianVariable("rho", (d, d))
-    Lambda_rho = k1 * rho * k1.conj().T + k2 * rho * k2.conj().T - rho
-    obj = pic.trace(Y * Lambda_rho).real
-    prob.set_objective("max", obj)
-    prob.add_constraint(rho >> 0)
-    prob.add_constraint(pic.trace(rho) == 1)
-    prob.solve()
-    return prob.value.real, rho.value
 
 
 """
@@ -192,7 +84,7 @@ for count in tqdm(range(omega_num)):
         # ----------------------------------------------------------------------
         # Trace distance between the two states
         # ----------------------------------------------------------------------
-        optimal_distance_EC = 2 * trace_distance(sigmaSA0, sigmaSA1)
+        optimal_distance_EC = 2 * qt.metrics.tracedist(sigmaSA0, sigmaSA1)
 
         # Compute Kraus operators E0, E1
         eigenvalues0, eigenvectors0 = sigmaSA0.eigenstates()
