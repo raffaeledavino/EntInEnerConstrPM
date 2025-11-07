@@ -1,8 +1,5 @@
 import numpy as np
-import picos as pic
 import qutip as qt
-from picos.modeling.problem import Problem
-import matplotlib.pyplot as plt
 
 from utils import *
 

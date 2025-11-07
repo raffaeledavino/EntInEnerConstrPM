@@ -1,5 +1,6 @@
 import numpy as np
 import picos as pic
+import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 from matplotlib.ticker import FormatStrFormatter
@@ -558,14 +559,114 @@ def induced_norm_distance_seesaw2(k1, k2, Y):
 # ------------------------------------------------------------------
 # Plots
 # ------------------------------------------------------------------
-def plot_min_entropy(filename, save_as="Pguess.png"):
+
+def plot_EA_data_from_txt(filepath,
+                          save_as="Fig_correlations_adv.png",
+                          save=True):
     """
-    Plot the min-entropy H_min from a data file containing (omega, non_ea, ea) values.
+    Plot entanglement-assisted (EA) and non-entanglement-assisted (non-EA)
+    correlations from data stored in a .txt file, replicating Fig. 3 of the paper.
+
+    The input file must contain four comma-separated columns (optionally with a header):
+        omega, non_EA_value, EA_value, EA_analytic_value
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the .txt file containing the data.
+    save_as : str, optional
+        Name of the output figure file (default: "Fig_correlations_adv.png").
+        The figure will be saved in a subfolder named "Plots" located in the
+        same directory as this script.
+    save : bool, optional
+        Whether to save the plot. If False, the figure is only displayed
+        without saving (default: True).
+    """
+    plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # --- Load data ---
+    omega, non_ea, ea, ea_analytic = [], [], [], []
+
+    with open(filepath, "r") as f:
+        for line in f:
+            if not line.strip() or line.startswith("#"):
+                continue
+            try:
+                w, n, e, ea_an = map(float, line.strip().split(","))
+                omega.append(w)
+                non_ea.append(n)
+                ea.append(e)
+                ea_analytic.append(ea_an)
+            except ValueError:
+                # Skip malformed lines or headers
+                continue
+
+    omega, non_ea, ea, ea_analytic = map(np.array, (omega, non_ea, ea, ea_analytic))
+
+    # --- Main plot ---
+    fig, ax = plt.subplots()
+    ax.plot(omega, non_ea, label=r'non-EA', linewidth=2)
+    ax.plot(omega, ea, label=r'EA (numerical)', linewidth=2)
+    ax.plot(omega, ea_analytic, label=r'EA (analytic)', linewidth=2)
+
+    ax.set_xlabel(r'$\omega$', fontsize=14)
+    ax.set_ylabel(r'max $I_{\mathrm{corr}}$', fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
+    ax.grid(True)
+    ax.legend(fontsize=11, frameon=False)
+
+    # --- Inset plot (zoomed region) ---
+    axins = inset_axes(ax, width="40%", height="40%", loc="lower right", borderpad=2)
+    axins.plot(omega, non_ea, linewidth=2)
+    axins.plot(omega, ea, linewidth=2)
+    axins.plot(omega, ea_analytic, linewidth=2)
+
+    # Define zoom window
+    x1, x2 = 0.01, 0.0105
+    axins.set_xlim(x1, x2)
+    y_data = [y for x, y in zip(omega, ea) if x1 <= x <= x2]
+    if y_data:
+        y_min, y_max = min(y_data), max(y_data)
+        padding = 0.05 * (y_max - y_min)
+        axins.set_ylim(y_min - padding, y_max + padding)
+    else:
+        axins.set_ylim(0.3975, 0.409)
+
+    axins.grid(True, linestyle="--", alpha=0.5)
+    axins.tick_params(axis='both', which='major', labelsize=9)
+    axins.set_facecolor("white")
+    for spine in axins.spines.values():
+        spine.set_edgecolor("#555555")
+        spine.set_linewidth(1.0)
+
+    axins.xaxis.set_major_formatter(FormatStrFormatter('%.4f'))
+    axins.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+    mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="gray",
+               lw=1.2, linestyle="--", alpha=0.7)
+
+    # --- Save or show ---
+    if save:
+        save_path = os.path.join(plots_dir, save_as)
+        fig.savefig(save_path, dpi=1000, bbox_inches="tight")
+        print(f"Figure saved to: {save_path}")
+    else:
+        print("Plot not saved (save=False).")
+
+    plt.show()
+
+
+def plot_min_entropy(filename,
+                     save_as="Pguess.png",
+                     save=True):
+    """
+    Plot the min-entropy H_min from a data file containing
+    (omega, non_ea, ea) values, replicating Fig. 4 of the paper.
 
     Parameters
     ----------
     filename : str
-        Path to the data file (e.g., 'data_avg_pg1.txt').
+        Path to the data file (e.g., 'data_avg_pg.txt').
         Each line should contain three comma-separated values:
             omega, non_ea_value, ea_value
     save_as : str, optional
@@ -574,6 +675,9 @@ def plot_min_entropy(filename, save_as="Pguess.png"):
     The function reads the data, computes -log2(values),
     and plots both curves with an inset zoomed region.
     """
+
+    plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
+    os.makedirs(plots_dir, exist_ok=True)
 
     # --- Load data from text file ---
     omega, non_ea, ea = [], [], []
@@ -653,168 +757,24 @@ def plot_min_entropy(filename, save_as="Pguess.png"):
     )
     ax.add_artist(con1)
     ax.add_artist(con2)
-
-    # --- Save and show ---
-    fig.savefig(save_as, dpi=1000, bbox_inches="tight")
-    plt.show()
-    print(f"✅ Figure saved as {save_as}")
-
-def plot_channel_discrimination_advantage(filename="Channel_discr_adv_data.txt", save_as="Channel_discr_adv.png"):
-    """
-    Plot the channel discrimination advantage data from a text file.
-
-    Parameters
-    ----------
-    filename : str
-        Path to the .txt file containing the data.
-        Expected format per line (without parentheses):
-            omega, ea_value, non_ea_value
-        Example:
-            0.01, 1.05, 1.00
-    save_as : str
-        Filename to save the generated figure as (default: 'Channel_discr_adv.png').
-
-    Notes
-    -----
-    - The green dashed line corresponds to the analytical bound in Eq. (19).
-    - The first and second columns correspond respectively to:
-        - entanglement-assisted advantage (ea)
-        - non-entangled advantage (non_ea)
-    """
-
-    # === Load data from TXT ===
-    omega, ea, non_ea = [], [], []
-
-    with open(filename, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):  # skip empty or comment lines
-                continue
-            line = line.replace("(", "").replace(")", "")
-            parts = line.split(",")
-            if len(parts) < 3:
-                continue
-            omega.append(float(parts[0]))
-            ea.append(float(parts[1]))
-            non_ea.append(float(parts[2]))
-
-    # Convert to numpy arrays
-    omega = np.array(omega)
-    ea = np.array(ea)
-    non_ea = np.array(non_ea)
-
-    # === Plot setup ===
-    fig, ax = plt.subplots()
-
-    ax.plot(omega, non_ea, label='Eq. (22)', linewidth=2)
-    ax.plot(omega, ea, label='Eq. (23)', linewidth=2)
-
-    # Theoretical bound line (Eq. 19)
-    y_val = 0.5 + 1 / np.sqrt(2)
-    ax.hlines(y=y_val, xmin=0.01, xmax=0.5, colors='green', linestyles='--', linewidth=2, label='Eq. (19)')
-
-    # === Axis labels and style ===
-    ax.set_xlabel(r'$\omega$', fontsize=14)
-    ax.tick_params(axis='both', labelsize=12)
-    ax.grid(True, linestyle='--', alpha=0.6)
-    ax.legend(fontsize=12, loc='best')
-
-    # === Save and show ===
-    plt.show()
-    fig.savefig(save_as, dpi=1000, bbox_inches='tight')
-    print(f"✅ Plot saved as '{save_as}'")
-
-
-def plot_EA_data_from_txt(filepath, savepath=None):
-    """
-    Plot entanglement-assisted and non-entanglement-assisted data from a .txt file.
-
-    Parameters
-    ----------
-    filepath : str
-        Path to the .txt file. The file must contain 4 columns:
-        omega, non_EA, EA, EA_analytic (comma-separated, with or without header).
-    savepath : str, optional
-        If provided, the figure will be saved to this path (e.g. 'figures/EA_plot.png').
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        The created figure object.
-    ax : matplotlib.axes.Axes
-        The main plot axes.
-    """
-
-    # --- Read data ---
-    omega, non_ea, ea, ea_analytic = [], [], [], []
-
-    with open(filepath, "r") as f:
-        for line in f:
-            if not line.strip() or line.startswith("#"):
-                continue
-            try:
-                w, n, e, ea_an = map(float, line.strip().split(","))
-                omega.append(w)
-                non_ea.append(n)
-                ea.append(e)
-                ea_analytic.append(ea_an)
-            except ValueError:
-                # skip header or malformed line
-                continue
-
-    omega, non_ea, ea, ea_analytic = map(np.array, (omega, non_ea, ea, ea_analytic))
-
-    # --- Plot main figure ---
-    fig, ax = plt.subplots()
-    ax.plot(omega, non_ea, label=r'non-EA', linewidth=2)
-    ax.plot(omega, ea, label=r'EA (numerical)', linewidth=2)
-    ax.plot(omega, ea_analytic, label=r'EA (analytic)', linewidth=2)
-
-    ax.set_xlabel(r'$\omega$', fontsize=14)
-    ax.set_ylabel(r'max $I_{\text{corr}}$', fontsize=14)
-    ax.tick_params(axis='both', labelsize=12)
-    ax.grid(True)
-
-    # --- Inset ---
-    axins = inset_axes(ax, width="40%", height="40%", loc="lower right", borderpad=2)
-    axins.plot(omega, non_ea, linewidth=2)
-    axins.plot(omega, ea, linewidth=2)
-    axins.plot(omega, ea_analytic, linewidth=2)
-
-    # Define zoom region
-    x1, x2 = 0.01, 0.0105
-    axins.set_xlim(x1, x2)
-    y_data = [y for x, y in zip(omega, ea) if x1 <= x <= x2]
-    if y_data:
-        y_min, y_max = min(y_data), max(y_data)
-        padding = 0.05 * (y_max - y_min)
-        axins.set_ylim(y_min - padding, y_max + padding)
+    if save:
+        # --- Save and show ---
+        save_path = os.path.join(plots_dir, save_as)
+        fig.savefig(save_path, dpi=1000, bbox_inches="tight")
+        print(f"Figure saved as {save_as}")
     else:
-        axins.set_ylim(0.3975, 0.409)
-
-    axins.grid(True, linestyle="--", alpha=0.5)
-    axins.tick_params(axis='both', which='major', labelsize=9)
-    axins.set_facecolor("white")
-    for spine in axins.spines.values():
-        spine.set_edgecolor("#555555")
-        spine.set_linewidth(1.0)
-    axins.xaxis.set_major_formatter(FormatStrFormatter('%.4f'))
-    axins.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
-    mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="gray", lw=1.2, linestyle="--", alpha=0.7)
-
-    # --- Save if requested ---
-    if savepath:
-        fig.savefig(savepath, dpi=1000, bbox_inches='tight')
-
+         print("Plot not saved (save=False)")
+    
     plt.show()
-    return fig, ax
 
 
 def plot_deterministic_inequality_violation(filename="data_viol_det_ineq.txt",
-                                            save_as="Viol_det_ineq1.png"):
+                                            save_as="Viol_det_ineq1.png",
+                                            save=True):
     """
     Plot the violation of the deterministic inequality for separable and 
-    entanglement-assisted scenarios.
+    entanglement-assisted scenarios from a data file containing
+    (omega, EA_value, nonEA_value), replicating Fig. 5 of the paper.
 
     Parameters
     ----------
@@ -824,6 +784,9 @@ def plot_deterministic_inequality_violation(filename="data_viol_det_ineq.txt",
     save_as : str
         Name of the output figure file to save.
     """
+
+    plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
+    os.makedirs(plots_dir, exist_ok=True)
 
     # --- Load data ---
     omega, ea, non_ea = [], [], []
@@ -864,8 +827,90 @@ def plot_deterministic_inequality_violation(filename="data_viol_det_ineq.txt",
     ax.grid(True, linestyle="--", alpha=0.6)
     plt.legend(fontsize=12)
 
-    # Show and save
+    if save:
+        # --- Save and show ---
+        save_path = os.path.join(plots_dir, save_as)
+        fig.savefig(save_path, dpi=1000, bbox_inches="tight")
+        print(f"Figure saved as {save_as}")
+    else:
+         print("Plot not saved (save=False)")
+        
     plt.show()
-    fig.savefig(save_as, dpi=1000, bbox_inches='tight')
 
-    print(f"Figure saved as '{save_as}'")
+
+def plot_channel_discrimination_advantage(filename="Channel_discr_adv_data.txt",
+                                          save_as="Channel_discr_adv.png",
+                                          save=True):
+    """
+    Plot the channel discrimination advantage data
+    from a text file, replicating Fig. 6 in the paper.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the .txt file containing the data.
+        Expected format per line (without parentheses):
+            omega, ea_value, non_ea_value
+        Example:
+            0.01, 1.05, 1.00
+    save_as : str
+        Filename to save the generated figure as (default: 'Channel_discr_adv.png').
+
+    Notes
+    -----
+    - The green dashed line corresponds to the analytical bound in Eq. (19).
+    - The first and second columns correspond respectively to:
+        - entanglement-assisted advantage (ea)
+        - non-entangled advantage (non_ea)
+    """
+
+    plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # === Load data from TXT ===
+    omega, ea, non_ea = [], [], []
+
+    with open(filename, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):  # skip empty or comment lines
+                continue
+            line = line.replace("(", "").replace(")", "")
+            parts = line.split(",")
+            if len(parts) < 3:
+                continue
+            omega.append(float(parts[0]))
+            ea.append(float(parts[1]))
+            non_ea.append(float(parts[2]))
+
+    # Convert to numpy arrays
+    omega = np.array(omega)
+    ea = np.array(ea)
+    non_ea = np.array(non_ea)
+
+    # === Plot setup ===
+    fig, ax = plt.subplots()
+
+    ax.plot(omega, non_ea, label='Eq. (22)', linewidth=2)
+    ax.plot(omega, ea, label='Eq. (23)', linewidth=2)
+
+    # Theoretical bound line (Eq. 19)
+    y_val = 0.5 + 1 / np.sqrt(2)
+    ax.hlines(y=y_val, xmin=0.01, xmax=0.5, colors='green', linestyles='--', linewidth=2, label='Eq. (19)')
+
+    # === Axis labels and style ===
+    ax.set_xlabel(r'$\omega$', fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.legend(fontsize=12, loc='best')
+
+
+    if save:
+        # --- Save and show ---
+        save_path = os.path.join(plots_dir, save_as)
+        fig.savefig(save_path, dpi=1000, bbox_inches="tight")
+        print(f"Figure saved as {save_as}")
+    else:
+         print("Plot not saved (save=False)")
+    
+    plt.show()

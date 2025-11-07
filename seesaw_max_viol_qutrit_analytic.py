@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     data = []
 
-        # === Load optimal_distance data ===
+    # === Load optimal_distance data ===
     optimal_distance_file = "optimal_distance_data.txt"
 
     # Load the file, skipping commented lines (starting with '#')
@@ -42,8 +42,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Main loop over energy values
     # ------------------------------------------------------------------
-    i=0
-    for w in energyrange:
+    for i, (w, ea_analytic_val) in enumerate(zip(energyrange, EAvalue_analytic)):
         print(f"⟶ Energy parameter: w = {w:.2f}")
 
         w0Avg, w1Avg = w, w
@@ -53,15 +52,15 @@ if __name__ == "__main__":
         for attempt in range(max_restarts):
             try:
                 # Initialize measurement operator and ground state
-                PiSA0 = qt.ket2dm(qt.rand_ket_haar(dimS*dimM, dims=[[dimS,dimM], [1,1]])).full()
-                measurement = [PiSA0,np.kron(np.eye(dimS),np.eye(dimM))-PiSA0]
-                ground = [[1, 0], [0, 0]]  
+                PiSA0 = qt.ket2dm(qt.rand_ket_haar(dimS * dimM, dims=[[dimS, dimM], [1, 1]])).full()
+                measurement = [PiSA0, np.kron(np.eye(dimS), np.eye(dimM)) - PiSA0]
+                ground = [[1, 0], [0, 0]]
 
-                # First step: optimize over states given initial measurement
+                # --- Step 1: optimize over states given initial measurement ---
                 behavior, states = findStateMaxViolation(dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt)
 
-                # Compute the initial Bell inequality value
-                newEAvalue = sum(behavior[i] * ineq[i] for i in range(4))
+                # Compute initial Bell inequality value
+                newEAvalue = sum(behavior[k] * ineq[k] for k in range(4))
                 oldEAvalue = 0
 
                 # ------------------------------------------------------------------
@@ -71,7 +70,7 @@ if __name__ == "__main__":
                     behavior, measurement = findMeasurementMaxViol(dimS, dimM, states, precisionopt)
                     behavior, states = findStateMaxViolation(dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt)
                     oldEAvalue = newEAvalue
-                    newEAvalue = sum(behavior[i] * ineq[i] for i in range(4))
+                    newEAvalue = sum(behavior[k] * ineq[k] for k in range(4))
 
                 success = True
                 break  # exit retry loop upon success
@@ -89,9 +88,8 @@ if __name__ == "__main__":
         nonEAvalue, _ = computeMaxIneqViolation(w0Avg, w1Avg, ineq, precisionopt)
 
         # Store results
-        data.append((w0Avg, nonEAvalue, newEAvalue, EAvalue_analytic[i]))
-        print(f"EA = {newEAvalue:.6f}, non-EA = {nonEAvalue:.6f}, EA_analytic = {EAvalue_analytic[i]:.6f}\n")
-        i+=1
+        data.append((w0Avg, nonEAvalue, newEAvalue, ea_analytic_val))
+        print(f"EA = {newEAvalue:.6f}, non-EA = {nonEAvalue:.6f}, EA_analytic = {ea_analytic_val:.6f}\n")
 
 
     # ------------------------------------------------------------------
@@ -99,7 +97,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
 
     # Define output filename
-    output_file = "EA_max_viol_data.txt"
+    output_file = "data_EA_max_viol.txt"
 
     # Save with header
     np.savetxt(
@@ -112,9 +110,9 @@ if __name__ == "__main__":
     )
 
     print("All runs completed successfully.")
-    print("Results saved to 'EA_max_viol_data.txt'.")
+    print("Results saved to 'data_EA_max_viol.txt'.")
 
-    plot_EA_data_from_txt("EA_max_viol_data.txt", savepath="Fig_advantage_correlations.png")
+    plot_EA_data_from_txt("data_EA_max_viol.txt", save_as="Fig_correlations_adv.png")
 
 
     
