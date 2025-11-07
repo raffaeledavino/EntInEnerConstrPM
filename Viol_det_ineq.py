@@ -1,111 +1,133 @@
+import os
 import numpy as np
 import picos as pic
 import qutip as qt
-
 from utils import *
 
-                               
+
+"""
+Performs a seesaw optimization to find the maximum Bell-inequality violation
+(both energy-assisted and non-energy-assisted) for a range of energy parameters w.
+
+Results are stored as tuples (w, non_EA_value, EA_value) and optionally saved to:
+'Data/data_viol_det_ineq.txt'
+"""
+
 if __name__ == "__main__":
-    """
-    Performs a seesaw optimization to find the maximum Bell-inequality violation
-    (both energy-assisted and non-energy-assisted) for a range of energy parameters w.
-
-    The results are stored as tuples (w, EA_value, nonEA_value)
-    in the list `results`, which can be saved or plotted later.
-
-    """
-
-    # ------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Configuration
-    # ------------------------------------------------------------------
-    
-    energyrange = np.arange(0.09, 0.51, 0.01)
+    # ----------------------------------------------------------------------
+    save = True  # Set to False if you don't want to save results
+    output_filename = "data_viol_det_ineq.txt"
+
+    energyrange = np.arange(0.30, 0.50, 0.01)
     dimS, dimM = 2, 3
-    max_restarts = 100000        # number of random restarts
-    tol = 1e-3               # convergence threshold
-    error = 1e-8
-    precisionopt = 1e-4   # precision parameter for picos optimization
+    max_restarts = 100000       # number of random restarts
+    num_trials = 5              # number of independent minimizations per w
+    tol = 1e-3                  # convergence threshold
+    error = 1e-4
+    precisionopt = 1e-4         # solver precision
 
+    results = []
 
+    # ----------------------------------------------------------------------
+    # Prepare Data directory
+    # ----------------------------------------------------------------------
+    base_dir = os.path.dirname(__file__)
+    data_dir = os.path.join(base_dir, "Data")
 
-    data = []
+    if save:
+        os.makedirs(data_dir, exist_ok=True)
+        data_path = os.path.join(data_dir, output_filename)
+        print(f"Saving results to {data_path}")
+    else:
+        data_path = None
+        print("Saving disabled (save=False).")
 
-    # ------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Main loop over energy values
-    # ------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     for w in energyrange:
-        print(f"⟶ Energy parameter: w = {w:.2f}")
-
+        print(f"\n⟶ Energy parameter: w = {w:.2f}")
         w0Avg, w1Avg = w, w
-        success = False
+        nonEA_E1value = 2 * (1 - 2 * w)**2 - 1
 
-        nonEA_E1value = 2*(1-2*w)**2-1
-        # Try multiple random initializations until one converges
-        for attempt in range(max_restarts):
-            try:
-                # Initialize measurement operator and ground state
-                PiSA0 = qt.ket2dm(qt.rand_ket_haar(dimS*dimM, dims=[[dimS,dimM], [1,1]])).full()
-                measurement = [PiSA0,np.kron(np.eye(dimS),np.eye(dimM))-PiSA0]
-                ground = [[1, 0], [0, 0]]  # reset ground state explicitly
+        best_EA_value = np.inf  # we minimize over the 5 trials
+        success_any = False
 
-                # First step: optimize over states given initial measurement
-                newE1value, states = findStateMinViolDet(dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt)
+        for trial in range(num_trials):
+            print(f"  Trial {trial + 1}/{num_trials}")
 
+            success = False
+            newE1value = np.nan
 
-                oldE1value = 0
+            # --- Multiple random initializations for this trial ---
+            for attempt in range(max_restarts):
+                try:
+                    # Random initial measurement
+                    PiSA0 = qt.ket2dm(
+                        qt.rand_ket_haar(dimS * dimM, dims=[[dimS, dimM], [1, 1]])
+                    ).full()
+                    measurement = [
+                        PiSA0,
+                        np.kron(np.eye(dimS), np.eye(dimM)) - PiSA0
+                    ]
+                    ground = [[1, 0], [0, 0]]
 
-                # ------------------------------------------------------------------
-                # Seesaw loop: alternate between optimizing measurement and states
-                # ------------------------------------------------------------------
-                while newE1value - oldE1value > tol or newE1value - nonEA_E1value > -error:
-                    oldE1value = newE1value
-                    measurement = findMeasurementMinViolDet(dimS, dimM, states, precisionopt)
-                    newE1value, states = findStateMinViolDet(dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt)
-                    
+                    # --- Seesaw optimization ---
+                    newE1value, states = findStateMinViolDet(
+                        dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
+                    )
+                    oldE1value = 0
 
-                success = True
-                break  # exit retry loop upon success
+                    while newE1value - oldE1value > tol or newE1value - nonEA_E1value > -error:
+                        oldE1value = newE1value
+                        measurement = findMeasurementMinViolDet(
+                            dimS, dimM, states, precisionopt
+                        )
+                        newE1value, states = findStateMinViolDet(
+                            dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
+                        )
 
-            except pic.SolutionFailure as e:
-                #print(f"  Solver failed on attempt {attempt + 1}: {e}")
-                continue  # retry with a new random initialization
+                    success = True
+                    break  # converged → stop restarts for this trial
 
-        #if not success:
-        #    raise RuntimeError(f"Seesaw optimization failed for w = {w:.2f} after {max_restarts} restarts.")
+                except pic.SolutionFailure:
+                    continue  # retry random initialization
 
-        # ------------------------------------------------------------------
-        # Compute non-energy-assisted (classical) value for comparison
-        # ------------------------------------------------------------------
+            if success:
+                success_any = True
+                best_EA_value = min(best_EA_value, newE1value)
 
+        if not success_any:
+            print(f" Optimization did not converge for w = {w:.2f}")
+            best_EA_value = np.nan
 
-        
-        # Store results
-        data.append((w0Avg, nonEA_E1value, newE1value))
-        print(f"EA = {newE1value:.6f}, non-EA = {nonEA_E1value:.6f}\n")
+        # Store the *minimum* EA value across all trials
+        results.append((w0Avg, nonEA_E1value, best_EA_value))
+        print(f" → Final EA(min) = {best_EA_value:.6f}, non-EA = {nonEA_E1value:.6f}")
 
+    # ----------------------------------------------------------------------
+    # Save results (if enabled)
+    # ----------------------------------------------------------------------
+    if save:
+        np.savetxt(
+            data_path,
+            results,
+            delimiter=",",
+            header="omega,non_EA,EA",
+            comments='',   # prevents "#" in header
+            fmt="%.8f"
+        )
+        print(f"\n Results successfully saved to {data_path}")
+    else:
+        print("\n Results not saved (save=False).")
 
-
-
-    # ------------------------------------------------------------------
-    # (Optional) Save results to file for later plotting
-    # ------------------------------------------------------------------
-    # Define output filename
-    output_file = "data_viol_det_ineq.txt"
-
-    # Save with header
-    np.savetxt(
-        output_file,
-        data,
-        delimiter=",",
-        header="omega,non_EA,EA",
-        comments='',   # prevents "#" at the start of the header line
-        fmt="%.8f"     # 8 decimal digits for precision
+    # ----------------------------------------------------------------------
+    # Plot results
+    # ----------------------------------------------------------------------
+    plot_deterministic_inequality_violation(
+        results,
+        save_as="Fig_viol_det_ineq.png",
+        save=True
     )
-
-    print("All runs completed successfully.")
-    print("Results saved to 'EA_max_viol_data.txt'.")
-
-    plot_deterministic_inequality_violation("data_viol_det_ineq.txt", save_as="viol_det_ineq.png")
-
-
-    

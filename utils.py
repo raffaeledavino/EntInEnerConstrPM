@@ -8,6 +8,10 @@ from matplotlib.patches import ConnectionPatch
 from picos.modeling.problem import Problem
 
 
+
+# ----------------------------------------------------------------------
+# Configure numerical precision for PICOS solvers
+# ----------------------------------------------------------------------
 def setNumericalPrecisionForSolver(problem, precision):
     """
     Sets high numerical precision parameters for PICOS solvers.
@@ -17,46 +21,86 @@ def setNumericalPrecisionForSolver(problem, precision):
     problem.options["rel_dual_fsb_tol"] = precision
     problem.options["max_footprints"] = None
 
-"""
-def trace_distance(rho, sigma):
-    diff = rho - sigma
-    singular_values = np.linalg.svd(diff.full(), compute_uv=False)
-    return 0.5 * np.sum(singular_values)
-"""
+
 
 # ----------------------------------------------------------------------
 # Utilities to compute the maximum violation of I_corr (Eq. (6)),
 # both for separable strategies and when entanglement is allowed.
 # ----------------------------------------------------------------------
-def computeMaxIneqViolation(w1,w2,f,precision):
-    prob=pic.Problem()
 
-    gamma=pic.SymmetricVariable('gamma',(4,4))
-    eta1=pic.RealVariable('eta1')
-    eta2=pic.RealVariable('eta2')
-    prob.add_constraint(gamma>>0)
-    prob.add_constraint(eta1<=w1)
-    prob.add_constraint(eta2<=w2)
-    prob.add_constraint(gamma[0,0] == 1)
-    prob.add_constraint(gamma[1,1] == 1)
-    prob.add_constraint(gamma[2,2] == 1)
-    prob.add_constraint(gamma[3,3] == 1)
-    prob.add_constraint(gamma[0,3]==2*eta1-1)
-    prob.add_constraint(gamma[1,3]==2*eta2-1)
-    E0,E1=gamma[0,2],gamma[1,2]
-    p00=1/2*(1+E0)
-    p10=1-p00
-    p01=1/2*(1+E1)
-    p11=1-p01
-    prob.add_constraint(p00>=0)
-    prob.add_constraint(p10>=0)
-    prob.add_constraint(p01>=0)
-    prob.add_constraint(p11>=0)
-    prob.set_objective('max',(f[0]*p00+f[1]*p10+f[2]*p01+f[3]*p11))
+# Compute the maximum I_corr violation without entanglement (Eq. (7))
+def computeMaxIneqViolation(w1, w2, precision):
+    """
+    Compute the maximal value of a Bell-like inequality (Eq. 13) 
+    under separable (non-entangled) strategies using semidefinite programming.
+
+    Parameters
+    ----------
+    w1 : float
+        Average energy parameter for the first state.
+    w2 : float
+        Average energy parameter for the second state.
+    f : list or np.ndarray
+        Coefficients of the target inequality [f00, f10, f01, f11].
+    precision : float
+        Numerical precision tolerance for the solver (e.g. 1e-8).
+
+    Returns
+    -------
+    value : float
+        Maximum inequality value achieved.
+    probs : list of float
+        Probabilities [p00, p10, p01, p11] corresponding to the optimal solution.
+    """
+    # Initialize the SDP problem
+    prob = pic.Problem()
+
+    # Define variables
+    gamma = pic.SymmetricVariable("gamma", (4, 4))
+    eta1 = pic.RealVariable("eta1")
+    eta2 = pic.RealVariable("eta2")
+
+    # Coefficients of the target inequality
+    f = [1, -1, -1, 1]
+
+    # Constraints
+    prob.add_constraint(gamma >> 0)
+    prob.add_constraint(eta1 <= w1)
+    prob.add_constraint(eta2 <= w2)
+
+    for i in range(4):
+        prob.add_constraint(gamma[i, i] == 1)
+
+    prob.add_list_of_constraints([
+        gamma[0, 3] == 2 * eta1 - 1,
+        gamma[1, 3] == 2 * eta2 - 1
+    ])
+
+    # Define expectation values
+    E0, E1 = gamma[0, 2], gamma[1, 2]
+
+    # Define joint probabilities
+    p00 = 0.5 * (1 + E0)
+    p10 = 1 - p00
+    p01 = 0.5 * (1 + E1)
+    p11 = 1 - p01
+
+    # Probability constraints
+    prob.add_list_of_constraints([
+        p00 >= 0, p10 >= 0, p01 >= 0, p11 >= 0
+    ])
+
+    # Objective function
+    objective = f[0]*p00 + f[1]*p10 + f[2]*p01 + f[3]*p11
+    prob.set_objective("max", objective)
+
+    # Set numerical precision and solve
     setNumericalPrecisionForSolver(prob, precision)
-    prob.solve(solver = "mosek", verbosity = False)
-    #return prob.value
-    return prob.value,[p00.value,p10.value,p01.value,p11.value]
+    prob.solve(solver="mosek", verbosity=False)
+
+    # Return optimal value and probabilities
+    return prob.value, [p00.value, p10.value, p01.value, p11.value]
+
 
 
 
@@ -82,13 +126,8 @@ def findMeasurementMaxViol(dimS, dimM, states, precision):
     
     firstEffect = np.matrix(PiSA0.value_as_matrix)
     measurement = [firstEffect,np.eye(dimS*dimM)-firstEffect]
-    behavior = [np.trace(sigmaSA0@measurement[0]),\
-                     np.trace(sigmaSA0@measurement[1]),\
-                              np.trace(sigmaSA1@measurement[0]),\
-                                       np.trace(sigmaSA1@measurement[1])]
-  
     
-    return behavior,measurement
+    return measurement
 
 
 def findStateMaxViolation(dim,dimM,w0,w1,measurement,ground, precision):
@@ -119,11 +158,7 @@ def findStateMaxViolation(dim,dimM,w0,w1,measurement,ground, precision):
     
     problem.solve(verbosity=False)
     
-    behavior = [np.trace(np.matrix(sigmaSA0.value_as_matrix)@PiSA0),\
-                     np.trace(np.matrix(sigmaSA0.value_as_matrix)@PiSA1),\
-                              np.trace(np.matrix(sigmaSA1.value_as_matrix)@PiSA0),\
-                                       np.trace(np.matrix(sigmaSA1.value_as_matrix)@PiSA1)]
-    return [p.real for p in behavior],[np.matrix(aState.value_as_matrix) for aState in states]
+    return problem.value,[np.matrix(aState.value_as_matrix) for aState in states]
 
 
 
@@ -463,10 +498,20 @@ def findStateMinViolDet(dimS,dimM,w0,w1,measurement,ground, precision):
     return problem.value, [np.matrix(aState.value_as_matrix) for aState in states]
     
 
+
 # ----------------------------------------------------------------------
 # Utilities to compute the upper bound on P_adv without energy constraint (Eq. (22)),
 # and the lower bound in the case with energy constraint (Eq. (23)).
 # ----------------------------------------------------------------------
+def random_qubit_state():
+    """
+    Generate a random qubit pure state as a density matrix.
+    """
+    psi = np.random.randn(2) + 1j * np.random.randn(2)
+    psi /= np.linalg.norm(psi)
+    return np.outer(psi, psi.conj())
+
+
 def diamond_norm_distance(choi_E):
     """
     Compute the diamond-norm distance between a given channel and the identity.
@@ -556,53 +601,48 @@ def induced_norm_distance_seesaw2(k1, k2, Y):
     prob.solve()
     return prob.value.real, rho.value
 
+
+
 # ------------------------------------------------------------------
 # Plots
 # ------------------------------------------------------------------
-
-def plot_EA_data_from_txt(filepath,
-                          save_as="Fig_correlations_adv.png",
-                          save=True):
+def plot_EA_violation_qutrit_analytic(data_source,
+                                      save_as="Fig_correlations_adv.png",
+                                      save=True):
     """
     Plot entanglement-assisted (EA) and non-entanglement-assisted (non-EA)
-    correlations from data stored in a .txt file, replicating Fig. 3 of the paper.
-
-    The input file must contain four comma-separated columns (optionally with a header):
-        omega, non_EA_value, EA_value, EA_analytic_value
+    correlations replicating Fig. 3 of the paper.
 
     Parameters
     ----------
-    filepath : str
-        Path to the .txt file containing the data.
+    data_source : str or array-like
+        Either:
+        - Path to the .txt file containing four comma-separated columns:
+              omega, non_EA, EA, EA_analytic
+        - Or a NumPy array/list of shape (N, 4) with those values directly.
     save_as : str, optional
         Name of the output figure file (default: "Fig_correlations_adv.png").
-        The figure will be saved in a subfolder named "Plots" located in the
-        same directory as this script.
     save : bool, optional
-        Whether to save the plot. If False, the figure is only displayed
-        without saving (default: True).
+        Whether to save the plot. If False, the figure is only displayed.
     """
-    plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
+
+    # --- Setup directories ---
+    base_dir = os.path.dirname(__file__)
+    plots_dir = os.path.join(base_dir, "Plots")
     os.makedirs(plots_dir, exist_ok=True)
 
     # --- Load data ---
-    omega, non_ea, ea, ea_analytic = [], [], [], []
-
-    with open(filepath, "r") as f:
-        for line in f:
-            if not line.strip() or line.startswith("#"):
-                continue
-            try:
-                w, n, e, ea_an = map(float, line.strip().split(","))
-                omega.append(w)
-                non_ea.append(n)
-                ea.append(e)
-                ea_analytic.append(ea_an)
-            except ValueError:
-                # Skip malformed lines or headers
-                continue
-
-    omega, non_ea, ea, ea_analytic = map(np.array, (omega, non_ea, ea, ea_analytic))
+    if isinstance(data_source, str):
+        # Load from file
+        omega, non_ea, ea, ea_analytic = np.loadtxt(
+            data_source, delimiter=",", unpack=True, comments="#"
+        )
+    else:
+        # Use data directly (from memory)
+        data_array = np.array(data_source)
+        if data_array.shape[1] < 4:
+            raise ValueError("Data must have four columns: omega, non_EA, EA, EA_analytic.")
+        omega, non_ea, ea, ea_analytic = data_array.T
 
     # --- Main plot ---
     fig, ax = plt.subplots()
@@ -614,7 +654,6 @@ def plot_EA_data_from_txt(filepath,
     ax.set_ylabel(r'max $I_{\mathrm{corr}}$', fontsize=14)
     ax.tick_params(axis='both', labelsize=12)
     ax.grid(True)
-    ax.legend(fontsize=11, frameon=False)
 
     # --- Inset plot (zoomed region) ---
     axins = inset_axes(ax, width="40%", height="40%", loc="lower right", borderpad=2)
@@ -625,13 +664,9 @@ def plot_EA_data_from_txt(filepath,
     # Define zoom window
     x1, x2 = 0.01, 0.0105
     axins.set_xlim(x1, x2)
-    y_data = [y for x, y in zip(omega, ea) if x1 <= x <= x2]
-    if y_data:
-        y_min, y_max = min(y_data), max(y_data)
-        padding = 0.05 * (y_max - y_min)
-        axins.set_ylim(y_min - padding, y_max + padding)
-    else:
-        axins.set_ylim(0.3975, 0.409)
+
+    
+    axins.set_ylim(0.3975, 0.409)
 
     axins.grid(True, linestyle="--", alpha=0.5)
     axins.tick_params(axis='both', which='major', labelsize=9)
@@ -656,8 +691,9 @@ def plot_EA_data_from_txt(filepath,
     plt.show()
 
 
-def plot_min_entropy(filename,
-                     save_as="Pguess.png",
+
+def plot_min_entropy(data_source,
+                     save_as="Fig_pguess.png",
                      save=True):
     """
     Plot the min-entropy H_min from a data file containing
@@ -665,39 +701,47 @@ def plot_min_entropy(filename,
 
     Parameters
     ----------
-    filename : str
-        Path to the data file (e.g., 'data_avg_pg.txt').
-        Each line should contain three comma-separated values:
-            omega, non_ea_value, ea_value
+    data_source : str | array-like
+        Either the filename (e.g., 'Data/data_avg_pg.txt')
+        or directly a numpy array/list of tuples (omega, non_ea, ea).
     save_as : str, optional
-        Output filename for saving the figure (default is 'Pguess.png').
-
-    The function reads the data, computes -log2(values),
-    and plots both curves with an inset zoomed region.
+        Output filename for saving the figure (default: 'Pguess.png').
+    save : bool, optional
+        If True, saves the figure in the /Plots directory.
     """
 
+
+    # --- Prepare output directory ---
     plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
     os.makedirs(plots_dir, exist_ok=True)
 
-    # --- Load data from text file ---
-    omega, non_ea, ea = [], [], []
-    with open(filename, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):  # ⬅️ skip header/comment lines
-                continue
-            line = line.replace("(", "").replace(")", "")
-            parts = line.split(",")
-            omega.append(float(parts[0]))
-            non_ea.append(float(parts[1]))
-            ea.append(float(parts[2]))
+    # ------------------------------------------------------------------
+    # Load or assign data
+    # ------------------------------------------------------------------
+    if isinstance(data_source, str):
+        # Load from file
+        omega, non_ea, ea = [], [], []
+        with open(data_source, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                line = line.replace("(", "").replace(")", "")
+                parts = line.split(",")
+                omega.append(float(parts[0]))
+                non_ea.append(float(parts[1]))
+                ea.append(float(parts[2]))
+        omega, non_ea, ea = np.array(omega), np.array(non_ea), np.array(ea)
+        print(f"Data loaded from file: {data_source}")
+    else:
+        # Directly use in-memory data
+        data_source = np.array(data_source)
+        omega, non_ea, ea = data_source[:, 0], data_source[:, 1], data_source[:, 2]
+        print("Using in-memory data (not loaded from file).")
 
-    # Convert to numpy arrays
-    omega = np.array(omega)
-    non_ea = np.array(non_ea)
-    ea = np.array(ea)
-
-    # --- Main figure ---
+    # ------------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------------
     fig, ax = plt.subplots()
 
     ax.plot(omega, -np.log2(non_ea), label=r'$H_{\min}^{*, \mathrm{sep}}$ [22]', linewidth=2)
@@ -708,17 +752,14 @@ def plot_min_entropy(filename,
     ax.tick_params(axis='both', labelsize=12)
     ax.grid(True)
 
-    # --- Inset plot (zoomed region) ---
+    # --- Inset plot ---
     axins = inset_axes(ax, width="40%", height="40%", loc="upper right", borderpad=2)
-
     axins.plot(omega, -np.log2(non_ea), linewidth=2)
     axins.plot(omega, -np.log2(ea), linewidth=2)
 
-    # Define zoom region
-    x1, x2 = 0.32, 0.47
+    x1, x2 = 0.32, 0.50
     axins.set_xlim(x1, x2)
 
-    # Compute y-range dynamically
     y_data = (
         [-np.log2(y) for x, y in zip(omega, ea) if x1 <= x <= x2] +
         [-np.log2(y) for x, y in zip(omega, non_ea) if x1 <= x <= x2]
@@ -728,7 +769,6 @@ def plot_min_entropy(filename,
         padding = 0.05 * (y_max - y_min)
         axins.set_ylim(y_min - padding, y_max + padding)
 
-    # Style inset
     axins.grid(True, linestyle="--", alpha=0.5)
     axins.tick_params(axis='both', which='major', labelsize=9)
     axins.set_facecolor("white")
@@ -740,177 +780,187 @@ def plot_min_entropy(filename,
     axins.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
 
     # Connect inset with main plot
-    xy_main_1 = (x1, y_min)
-    xy_inset_1 = (x1, y_min)
-    xy_main_2 = (x2, y_max)
-    xy_inset_2 = (x2, y_max)
-
-    con1 = ConnectionPatch(
-        xyA=xy_inset_1, coordsA=axins.transData,
-        xyB=xy_main_1, coordsB=ax.transData,
-        color="gray", linestyle="--", lw=1.0, alpha=0.6, clip_on=False
-    )
-    con2 = ConnectionPatch(
-        xyA=xy_inset_2, coordsA=axins.transData,
-        xyB=xy_main_2, coordsB=ax.transData,
-        color="gray", linestyle="--", lw=1.0, alpha=0.6, clip_on=False
-    )
+    con1 = ConnectionPatch(xyA=(x1, y_min), coordsA=axins.transData,
+                           xyB=(x1, y_min), coordsB=ax.transData,
+                           color="gray", linestyle="--", lw=1.0, alpha=0.6, clip_on=False)
+    con2 = ConnectionPatch(xyA=(x2, y_max), coordsA=axins.transData,
+                           xyB=(x2, y_max), coordsB=ax.transData,
+                           color="gray", linestyle="--", lw=1.0, alpha=0.6, clip_on=False)
     ax.add_artist(con1)
     ax.add_artist(con2)
+
+    # ------------------------------------------------------------------
+    # Save or show
+    # ------------------------------------------------------------------
     if save:
-        # --- Save and show ---
         save_path = os.path.join(plots_dir, save_as)
         fig.savefig(save_path, dpi=1000, bbox_inches="tight")
-        print(f"Figure saved as {save_as}")
+        print(f"Figure saved as: {save_path}")
     else:
-         print("Plot not saved (save=False)")
-    
+        print("Plot not saved (save=False).")
+
     plt.show()
 
 
-def plot_deterministic_inequality_violation(filename="data_viol_det_ineq.txt",
-                                            save_as="Viol_det_ineq1.png",
+
+def plot_deterministic_inequality_violation(data_source,
+                                            save_as="Fig_viol_det_ineq.png",
                                             save=True):
     """
     Plot the violation of the deterministic inequality for separable and 
-    entanglement-assisted scenarios from a data file containing
-    (omega, EA_value, nonEA_value), replicating Fig. 5 of the paper.
+    entanglement-assisted scenarios, replicating Fig. 5 of the paper.
 
     Parameters
     ----------
-    filename : str
-        Path to the .txt data file containing values of (omega, EA_value, nonEA_value).
-        Each line should be of the form: (omega, ea, non_ea)
-    save_as : str
-        Name of the output figure file to save.
+    data_source : str | array-like
+        Either a filename (e.g., 'Data/data_viol_det_ineq.txt')
+        or directly a numpy array/list of (omega, ea, non_ea) tuples.
+    save_as : str, optional
+        Output filename for saving the figure (default: 'Fig_viol_det_ineq.png').
+    save : bool, optional
+        If True, saves the figure in the /Plots directory.
     """
 
+    # --- Prepare output directory ---
     plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
     os.makedirs(plots_dir, exist_ok=True)
 
-    # --- Load data ---
-    omega, ea, non_ea = [], [], []
+    # ------------------------------------------------------------------
+    # Load or assign data
+    # ------------------------------------------------------------------
+    if isinstance(data_source, str):
+        if not os.path.exists(data_source):
+            raise FileNotFoundError(f"File not found: {data_source}")
+        omega, ea, non_ea = [], [], []
+        with open(data_source, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                line = line.replace("(", "").replace(")", "")
+                parts = [p.strip() for p in line.split(",")]
+                try:
+                    omega.append(float(parts[0]))
+                    ea.append(float(parts[1]))
+                    non_ea.append(float(parts[2]))
+                except (ValueError, IndexError):
+                    continue
+        omega, ea, non_ea = np.array(omega), np.array(ea), np.array(non_ea)
+        print(f"Data loaded from file: {data_source}")
+    else:
+        # Directly use in-memory data
+        data_source = np.array(data_source)
+        if data_source.shape[1] != 3:
+            raise ValueError("In-memory data must have 3 columns: (omega, ea, non_ea)")
+        omega, ea, non_ea = data_source[:, 0], data_source[:, 1], data_source[:, 2]
+        print("Using in-memory data (not loaded from file).")
 
-    with open(filename, "r") as f:
-        for line in f:
-            line = line.strip()
-            # Skip empty or comment lines
-            if not line or line.startswith("#"):
-                continue
 
-            # Remove parentheses and split by comma
-            line = line.replace("(", "").replace(")", "")
-            parts = [p.strip() for p in line.split(",")]
-
-            try:
-                omega.append(float(parts[0]))
-                ea.append(float(parts[1]))
-                non_ea.append(float(parts[2]))
-            except ValueError:
-                # Skip malformed lines
-                continue
-
-    # --- Convert to numpy arrays ---
-    omega = np.array(omega)
-    ea = np.array(ea)
-    non_ea = np.array(non_ea)
-
-    # --- Plot ---
+    # ------------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------------
     fig, ax = plt.subplots()
 
     ax.plot(omega, non_ea, label=r'$I_{\mathrm{det}}^{\omega, \mathrm{sep}}$', linewidth=2)
     ax.plot(omega, ea, label=r'Seesaw upper bound to Eq. (13)', linewidth=2)
 
-    # Labels, grid, legend
-    plt.xlabel(r'$\omega$', fontsize=14)
-    plt.tick_params(axis='both', labelsize=12)
+    ax.set_xlabel(r'$\omega$', fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
     ax.grid(True, linestyle="--", alpha=0.6)
-    plt.legend(fontsize=12)
+    ax.legend(fontsize=12)
 
+    # ------------------------------------------------------------------
+    # Save or show
+    # ------------------------------------------------------------------
     if save:
-        # --- Save and show ---
         save_path = os.path.join(plots_dir, save_as)
         fig.savefig(save_path, dpi=1000, bbox_inches="tight")
-        print(f"Figure saved as {save_as}")
+        print(f"Figure saved as: {save_path}")
     else:
-         print("Plot not saved (save=False)")
-        
+        print("Plot not saved (save=False).")
+
     plt.show()
 
 
-def plot_channel_discrimination_advantage(filename="Channel_discr_adv_data.txt",
-                                          save_as="Channel_discr_adv.png",
+def plot_channel_discrimination_advantage(data_source,
+                                          save_as="Fig_channel_discr_adv.png",
                                           save=True):
     """
-    Plot the channel discrimination advantage data
-    from a text file, replicating Fig. 6 in the paper.
+    Plot the channel discrimination advantage data, replicating Fig. 6.
 
     Parameters
     ----------
-    filename : str
-        Path to the .txt file containing the data.
-        Expected format per line (without parentheses):
-            omega, ea_value, non_ea_value
-        Example:
-            0.01, 1.05, 1.00
-    save_as : str
-        Filename to save the generated figure as (default: 'Channel_discr_adv.png').
-
-    Notes
-    -----
-    - The green dashed line corresponds to the analytical bound in Eq. (19).
-    - The first and second columns correspond respectively to:
-        - entanglement-assisted advantage (ea)
-        - non-entangled advantage (non_ea)
+    data_source : str | array-like
+        Either a filename (e.g., 'Data/data_channel_discr_adv.txt')
+        or directly a numpy array/list of (omega, ea, non_ea) tuples.
+    save_as : str, optional
+        Output filename for saving the figure (default: 'Fig_channel_discr_adv.png').
+    save : bool, optional
+        If True, saves the figure in the /Plots directory.
     """
 
+    # --- Prepare output directory ---
     plots_dir = os.path.join(os.path.dirname(__file__), "Plots")
     os.makedirs(plots_dir, exist_ok=True)
 
-    # === Load data from TXT ===
-    omega, ea, non_ea = [], [], []
+    # ------------------------------------------------------------------
+    # Load or assign data
+    # ------------------------------------------------------------------
+    if isinstance(data_source, str):
+        if not os.path.exists(data_source):
+            raise FileNotFoundError(f"File not found: {data_source}")
+        omega, ea, non_ea = [], [], []
+        with open(data_source, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                line = line.replace("(", "").replace(")", "")
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) < 3:
+                    continue
+                try:
+                    omega.append(float(parts[0]))
+                    ea.append(float(parts[1]))
+                    non_ea.append(float(parts[2]))
+                except ValueError:
+                    continue
+        omega, ea, non_ea = np.array(omega), np.array(ea), np.array(non_ea)
+        print(f"Data loaded from file: {data_source}")
+    else:
+        # Directly use in-memory data
+        data_source = np.array(data_source)
+        if data_source.shape[1] != 3:
+            raise ValueError("In-memory data must have 3 columns: (omega, ea, non_ea)")
+        omega, ea, non_ea = data_source[:, 0], data_source[:, 1], data_source[:, 2]
+        print("Using in-memory data (not loaded from file).")
 
-    with open(filename, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):  # skip empty or comment lines
-                continue
-            line = line.replace("(", "").replace(")", "")
-            parts = line.split(",")
-            if len(parts) < 3:
-                continue
-            omega.append(float(parts[0]))
-            ea.append(float(parts[1]))
-            non_ea.append(float(parts[2]))
-
-    # Convert to numpy arrays
-    omega = np.array(omega)
-    ea = np.array(ea)
-    non_ea = np.array(non_ea)
-
-    # === Plot setup ===
+    # ------------------------------------------------------------------
+    # Plot setup
+    # ------------------------------------------------------------------
     fig, ax = plt.subplots()
 
     ax.plot(omega, non_ea, label='Eq. (22)', linewidth=2)
     ax.plot(omega, ea, label='Eq. (23)', linewidth=2)
 
-    # Theoretical bound line (Eq. 19)
+    # Analytical bound (Eq. 19)
     y_val = 0.5 + 1 / np.sqrt(2)
-    ax.hlines(y=y_val, xmin=0.01, xmax=0.5, colors='green', linestyles='--', linewidth=2, label='Eq. (19)')
+    ax.hlines(y=y_val, xmin=min(omega), xmax=max(omega),
+              colors='green', linestyles='--', linewidth=2, label='Eq. (19)')
 
-    # === Axis labels and style ===
     ax.set_xlabel(r'$\omega$', fontsize=14)
     ax.tick_params(axis='both', labelsize=12)
     ax.grid(True, linestyle='--', alpha=0.6)
     ax.legend(fontsize=12, loc='best')
 
-
+    # ------------------------------------------------------------------
+    # Save or show
+    # ------------------------------------------------------------------
     if save:
-        # --- Save and show ---
         save_path = os.path.join(plots_dir, save_as)
         fig.savefig(save_path, dpi=1000, bbox_inches="tight")
-        print(f"Figure saved as {save_as}")
+        print(f"Figure saved as: {save_path}")
     else:
-         print("Plot not saved (save=False)")
-    
+        print("Plot not saved (save=False).")
+
     plt.show()

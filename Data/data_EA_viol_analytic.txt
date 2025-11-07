@@ -1,4 +1,4 @@
-# omega p_opt optimal_distance
+# omega p_opt EA_viol_analytic
 0.010000 0.454384 0.398406
 0.020000 0.437708 0.561072
 0.030000 0.425445 0.684201
