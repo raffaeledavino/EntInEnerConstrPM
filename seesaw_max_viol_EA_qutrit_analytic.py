@@ -14,16 +14,13 @@ if __name__ == "__main__":
         ./Data/data_EA_max_viol.txt
     """
 
-    # ------------------------------------------------------------------
-    # Configuration
-    # ------------------------------------------------------------------
+    # Paramaters
     energyrange = np.arange(0.01, 0.51, 0.01)
     dimS, dimM = 2, 3
     max_restarts = 20        # Number of random restarts
     tol = 1e-7               # Convergence threshold
     precisionopt = 1e-12     # Solver precision for PICOS
 
-    data = []
 
     # ----------------------------------------------------------------------
     # Load analytical data of the entanglement-assisted violation of I_corr
@@ -41,9 +38,19 @@ if __name__ == "__main__":
     # Columns: [omega, p_opt, EA_viol_analytic]
     EAvalue_analytic = data_loaded[:, 2]
 
+    # Prepare Data directory
+    save = True  # Set to False if you don't want to save results
+    output_file = "data_EA_max_viol.txt"
+    base_dir = os.path.dirname(__file__)
+    data_dir = os.path.join(base_dir, "Data")
+    data_path = os.path.join(data_dir, output_file)
+    os.makedirs(data_dir, exist_ok=True)
+    
     # ------------------------------------------------------------------
     # Main loop over energy values
     # ------------------------------------------------------------------
+    results = []
+    
     for i, (w, ea_analytic_val) in enumerate(zip(energyrange, EAvalue_analytic)):
         print(f"⟶ Energy parameter: w = {w:.2f}")
 
@@ -99,32 +106,33 @@ if __name__ == "__main__":
         nonEAvalue, _ = computeMaxIneqViolation(w0Avg, w1Avg, precisionopt)
 
         # Store results
-        data.append((w0Avg, nonEAvalue, newEAvalue, ea_analytic_val))
+        results.append((w0Avg, nonEAvalue, newEAvalue, ea_analytic_val))
         print(
             f"EA = {newEAvalue:.6f}, non-EA = {nonEAvalue:.6f}, EA_analytic = {ea_analytic_val:.6f}\n"
         )
 
-    # ------------------------------------------------------------------
-    # Save results to ./Data/
-    # ------------------------------------------------------------------
-    data_path = os.path.join(data_dir, "data_EA_max_viol.txt")
-
-    np.savetxt(
-        data_path,
-        data,
-        delimiter=",",
-        header="omega,non_EA,EA,EA_analytic",
-        comments="# ",
-        fmt="%.8f",
-    )
-
-    print("\nAll runs completed successfully.")
-    print(f"Results saved to '{data_path}'.")
+    # ------------------------------------------------------------
+    # Save results to file
+    # ------------------------------------------------------------
+    if save:
+        np.savetxt(
+            data_path,
+            results,
+            delimiter=",",
+            header="omega,non_EA,EA,EA_analytic",
+            comments="# ",
+            fmt="%.8f",
+        )
+        print(f"\n Results successfully saved to {data_path}")
+    else:
+        print("\n Results not saved (save=False).")
+    
 
     # ----------------------------------------------------------------------
     # Plot results
     # ----------------------------------------------------------------------
-    plot_EA_violation_qutrit_analytic(data,
-                                      save_as="Fig_correlations_adv.png",
-                                      save=True
+    plot_EA_violation_qutrit_analytic(
+        results,   # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
+        save_as="Fig_correlations_adv.png",
+        save=True
     )

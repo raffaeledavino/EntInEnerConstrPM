@@ -31,8 +31,8 @@ def setNumericalPrecisionForSolver(problem, precision):
 # Compute the maximum I_corr violation without entanglement (Eq. (7))
 def computeMaxIneqViolation(w1, w2, precision):
     """
-    Compute the maximal value of a Bell-like inequality (Eq. 13) 
-    under separable (non-entangled) strategies using semidefinite programming.
+    Compute the maximal value of I_corr (Eq. 7) under separable
+    (non-entangled) strategies using semidefinite programming.
 
     Parameters
     ----------
@@ -40,8 +40,6 @@ def computeMaxIneqViolation(w1, w2, precision):
         Average energy parameter for the first state.
     w2 : float
         Average energy parameter for the second state.
-    f : list or np.ndarray
-        Coefficients of the target inequality [f00, f10, f01, f11].
     precision : float
         Numerical precision tolerance for the solver (e.g. 1e-8).
 
@@ -103,62 +101,134 @@ def computeMaxIneqViolation(w1, w2, precision):
 
 
 
-
+# Seesaw in which we fix the states and optimize
+# over the measurement to maximize I_corr (Eq. 6)
 def findMeasurementMaxViol(dimS, dimM, states, precision):
-    
+    """
+    Given the system and ancilla states sigma_SA^x, find the optimal
+    two-outcome measurement {Pi_SA^0, Pi_SA^1} that maximizes I_corr.
+
+    Parameters
+    ----------
+    dimS : int
+        Dimension of the system.
+    dimM : int
+        Dimension of the ancilla (or measurement register).
+    states : list of np.ndarray
+        List containing two bipartite density matrices [sigma_SA^0, sigma_SA^1].
+    precision : float
+        Numerical precision used by the SDP solver.
+
+    Returns
+    -------
+    measurement : list of np.ndarray
+        The optimized measurement operators [Pi_SA^0, Pi_SA^1].
+    """
     problem = Problem()
-    PiSA0=pic.HermitianVariable('PiSA0',shape=(dimS*dimM,dimS*dimM))
-    PiSA1=pic.HermitianVariable('PiSA1',shape=(dimS*dimM,dimS*dimM))
-    problem.add_constraint(PiSA0>>0)
-    problem.add_constraint(PiSA1>>0)
-    problem.add_constraint(PiSA0+PiSA1==np.eye(dimS*dimM))
 
-    sigmaSA0=states[0]
-    sigmaSA1=states[1]
-    
-    objective=pic.trace(sigmaSA0*PiSA0)-pic.trace(sigmaSA0*PiSA1)-pic.trace(sigmaSA1*PiSA0)+pic.trace(sigmaSA1*PiSA1)
+    # Measurement effects
+    PiSA0 = pic.HermitianVariable("PiSA0", shape=(dimS * dimM, dimS * dimM))
+    PiSA1 = pic.HermitianVariable("PiSA1", shape=(dimS * dimM, dimS * dimM))
 
-    
-    problem.set_objective("max",objective)
+    # Positivity and completeness constraints
+    problem.add_constraint(PiSA0 >> 0)
+    problem.add_constraint(PiSA1 >> 0)
+    problem.add_constraint(PiSA0 + PiSA1 == np.eye(dimS * dimM))
+
+    # Objective: maximize I_corr
+    sigmaSA0, sigmaSA1 = states
+    objective = (
+        pic.trace(sigmaSA0 * PiSA0)
+        - pic.trace(sigmaSA0 * PiSA1)
+        - pic.trace(sigmaSA1 * PiSA0)
+        + pic.trace(sigmaSA1 * PiSA1)
+    )
+
+    problem.set_objective("max", objective)
     setNumericalPrecisionForSolver(problem, precision)
-    
-    problem.solve()
-    
-    firstEffect = np.matrix(PiSA0.value_as_matrix)
-    measurement = [firstEffect,np.eye(dimS*dimM)-firstEffect]
-    
+
+    problem.solve(verbosity=False)
+
+    # Extract optimal measurement
+    PiSA0_opt = np.array(PiSA0.value_as_matrix)
+    measurement = [PiSA0_opt, np.eye(dimS * dimM) - PiSA0_opt]
+
     return measurement
 
 
-def findStateMaxViolation(dim,dimM,w0,w1,measurement,ground, precision):
-    
-    PiSA0 = measurement[0]
-    PiSA1 = measurement[1]
-    
+# Seesaw in which we fix the measurement and optimize
+# over the states to maximize I_corr (Eq. 6)
+def findStateMaxViolation(dimS, dimM, w0, w1, measurement, ground, precision):
+    """
+    Given a fixed measurement, find the optimal bipartite states
+    sigma_SA^0 and sigma_SA^1 that maximize I_corr, under energy constraints.
+
+    Parameters
+    ----------
+    dimS, dimM : int
+        Dimensions of system and ancilla subsystems.
+    w0, w1 : float
+        Energy constraints for sigma_SA^0 and sigma_SA^1 respectively.
+    measurement : list of np.ndarray
+        Measurement operators [Pi_SA^0, Pi_SA^1].
+    ground : np.ndarray
+        Ground state projector on the system.
+    precision : float
+        Numerical precision used by the SDP solver.
+
+    Returns
+    -------
+    (float, list of np.ndarray)
+        Maximum I_corr value and the corresponding optimal states
+        [sigma_SA^0, sigma_SA^1].
+    """
+    PiSA0, PiSA1 = measurement
     problem = Problem()
 
-    states=[pic.HermitianVariable('phi_'+str(a),shape=(dim*dimM,dim*dimM)) for a in range(2)]
-    problem.add_list_of_constraints([aState>>0 for aState in states])
-    problem.add_list_of_constraints([pic.trace(aState)==1 for aState in states])
-    
-    sigmaSA0=states[0]
-    sigmaSA1=states[1]
-    
-    "Marginal's on A of the states sigma_{SA}^x should be equal"
-    problem.add_constraint(pic.partial_trace(sigmaSA0,0,[dim,dimM])==pic.partial_trace(sigmaSA1,0,[dim,dimM]))
-    
-    "Overlap with groundstate should be large"
-    problem.add_constraint(pic.trace(np.kron(ground,np.eye(dimM))*sigmaSA0)>=1-w0)
-    problem.add_constraint(pic.trace(np.kron(ground,np.eye(dimM))*sigmaSA1)>=1-w1)
+    # Variables: bipartite states sigma_SA^0 and sigma_SA^1
+    states = [
+        pic.HermitianVariable(f"sigma_{x}", shape=(dimS * dimM, dimS * dimM))
+        for x in range(2)
+    ]
+    sigmaSA0, sigmaSA1 = states
 
-    objective=pic.trace(sigmaSA0*PiSA0)-pic.trace(sigmaSA0*PiSA1)-pic.trace(sigmaSA1*PiSA0)+pic.trace(sigmaSA1*PiSA1)
-    
-    problem.set_objective("max",objective)
+    # Basic constraints: positivity and unit trace
+    problem.add_list_of_constraints([rho >> 0 for rho in states])
+    problem.add_list_of_constraints([pic.trace(rho) == 1 for rho in states])
+
+    # Equal marginal constraint: Tr_S(sigma_SA^0) = Tr_S(sigma_SA^1)
+    problem.add_constraint(
+        pic.partial_trace(sigmaSA0, 0, [dimS, dimM])
+        == pic.partial_trace(sigmaSA1, 0, [dimS, dimM])
+    )
+
+    # Energy constraints: ⟨ground|sigma_SA^x|ground⟩ ≥ 1 - w_x
+    problem.add_constraint(
+        pic.trace(np.kron(ground, np.eye(dimM)) * sigmaSA0) >= 1 - w0
+    )
+    problem.add_constraint(
+        pic.trace(np.kron(ground, np.eye(dimM)) * sigmaSA1) >= 1 - w1
+    )
+
+    # Objective: maximize I_corr
+    objective = (
+        pic.trace(sigmaSA0 * PiSA0)
+        - pic.trace(sigmaSA0 * PiSA1)
+        - pic.trace(sigmaSA1 * PiSA0)
+        + pic.trace(sigmaSA1 * PiSA1)
+    )
+
+    problem.set_objective("max", objective)
     setNumericalPrecisionForSolver(problem, precision)
-    
+
     problem.solve(verbosity=False)
-    
-    return problem.value,[np.matrix(aState.value_as_matrix) for aState in states]
+
+    # Extract optimal states and value
+    value = problem.value
+    sigmaSA_opt = [np.array(rho.value_as_matrix) for rho in states]
+
+    return value, sigmaSA_opt
+
 
 
 
@@ -167,50 +237,92 @@ def findStateMaxViolation(dim,dimM,w0,w1,measurement,ground, precision):
 # achievable with quantum resources and entanglement assistance (EA),
 # as defined in Eq. (8).
 # ----------------------------------------------------------------------
-def addNormalizationConstraints(prob,gammas):
 
-    #p(gammaAX) in the diagonal of gammaAX
-    norm=0
-    for g in gammas:
-        pGamma=g[0,0]
-        prob.add_constraint(pGamma>=0)
-        prob.add_constraint(g[1,1]==pGamma)
-        prob.add_constraint(g[2,2]==pGamma)
-        prob.add_constraint(g[3,3]==pGamma)
-        norm=norm+pGamma
 
-    #p(Gamma00)+p(gamma01)+p(gamma10)+p(gamma11)==1
-    prob.add_constraint(norm==1)
+# Add normalization constraints (for ComputeGuessingProbability function)
+def addNormalizationConstraints(prob, gammas):
+    """
+    Enforces normalization constraints on the list of moment matrices gamma.
 
-def addEnergyConstraints(prob,gammas,w0Avg,w1Avg,w0Peak,w1Peak):
+    Each gamma corresponds to a conditional probability distribution p(γ),
+    which appears as gamma[0,0] on the diagonal. The constraint ensures that:
+        - p(gamma) ≥ 0
+        - gamma[i,i] = p(gamma) for i = 1, 2, 3
+        - The probabilities sum to 1: Σ p(gamma) = 1
 
-    w0s=[]
-    w1s=[]
+    Parameters
+    ----------
+    prob : pic.Problem
+        The optimization problem to which constraints are added.
+    gammas : list of pic.MatrixVariable
+        List of moment matrices gamma_AX associated with different settings.
+    """
+    total_prob = 0
+
     for gamma in gammas:
-        pGamma=gamma[0,0]
+        p_gamma = gamma[0, 0]
 
-        w0=pic.RealVariable('w0'+str(gamma))
-        w0s.append(w0)
+        # Basic positivity and normalization conditions
+        prob.add_constraint(p_gamma >= 0)
+        for i in range(1, 4):
+            prob.add_constraint(gamma[i, i] == p_gamma)
 
-        w1=pic.RealVariable('w1'+str(gamma))
-        w1s.append(w1)
+        total_prob += p_gamma
 
-        prob.add_constraint(w0>=0)
-        prob.add_constraint(w1>=0)
-        prob.add_constraint(w0<=pGamma*w0Peak)
-        prob.add_constraint(w1<=pGamma*w1Peak)
-        prob.add_constraint(gamma[0,3]+pGamma<=2*w0)
-        prob.add_constraint(gamma[1,3]+pGamma<=2*w1)
+    # Global normalization
+    prob.add_constraint(total_prob == 1)
 
-    suma=0
-    for w in w0s:
-        suma+=w
-    prob.add_constraint(suma<=w0Avg)
 
-    suma=0
-    for w in w1s:
-        suma+=w
-    prob.add_constraint(suma<=w1Avg)
+# Add average energy constraints for the states states^x (for ComputeGuessingProbability function)
+def addEnergyConstraints(prob, gammas, w0Avg, w1Avg, w0Peak, w1Peak):
+    """
+    Adds energy constraints linking the moment matrices gamma to average and
+    peak energy parameters (w0Avg, w1Avg, w0Peak, w1Peak).
+
+    For each gamma:
+        - Introduce auxiliary variables w0, w1 ≥ 0
+        - Bound them by the local probabilities and energy peaks
+        - Impose consistency relations connecting gamma entries to w0, w1
+
+    Global constraints ensure:
+        sum w0 ≤ w0Avg   and   sum w1 ≤ w1Avg
+
+    Parameters
+    ----------
+    prob : pic.Problem
+        The optimization problem to which constraints are added.
+    gammas : list of pic.MatrixVariable
+        List of moment matrices gamma.
+    w0Avg, w1Avg : float
+        Average (expected) energy limits for x = 0,1.
+    w0Peak, w1Peak : float
+        Peak energy values for x = 0,1.
+    """
+    w0_vars, w1_vars = [], []
+
+    for idx, gamma in enumerate(gammas):
+        p_gamma = gamma[0, 0]
+
+        # Auxiliary real variables representing weighted energies
+        w0 = pic.RealVariable(f"w0_{idx}")
+        w1 = pic.RealVariable(f"w1_{idx}")
+        w0_vars.append(w0)
+        w1_vars.append(w1)
+
+        # Local energy bounds
+        prob.add_constraint(w0 >= 0)
+        prob.add_constraint(w1 >= 0)
+        prob.add_constraint(w0 <= p_gamma * w0Peak)
+        prob.add_constraint(w1 <= p_gamma * w1Peak)
+
+        # Consistency with γ matrix elements
+        prob.add_constraint(gamma[0, 3] + p_gamma <= 2 * w0)
+        prob.add_constraint(gamma[1, 3] + p_gamma <= 2 * w1)
+
+    # Global energy budget constraints
+    prob.add_constraint(sum(w0_vars) <= w0Avg)
+    prob.add_constraint(sum(w1_vars) <= w1Avg)
+
 
 """ def computeGuessingProbability(w0Avg, w1Avg,w0Peak,w1Peak,expectedBehavior):
     prob=pic.Problem()
@@ -271,40 +383,80 @@ def addEnergyConstraints(prob,gammas,w0Avg,w1Avg,w0Peak,w1Peak):
     prob.solve(solver = "mosek", verbosity = False)
     return prob.value """
 
+# Guessing probability for a separable initial state (Ref. [23])
+def ComputeGuessingProbability(w0Avg, w1Avg, w0Peak, w1Peak, nonEABellValue, precision):
+    """
+    Computes Eve's optimal guessing probability (Eq. 8) for a separable
+    initial state under an average energy constraint.
 
-def ComputeGuessingProbability(w0Avg,w1Avg,w0Peak,w1Peak,nonEABellValue, precision):
-    prob=pic.Problem()
-    
-    gamma0=pic.SymmetricVariable('gamma00',(4,4))
-    gamma1=pic.SymmetricVariable('gamma01',(4,4))
-    gammas=[gamma0,gamma1]
+    The optimization is formulated as a semidefinite program (SDP)
+    using the moment matrices gamma0, gamma1 representing conditional states.
+    The constraints enforce:
+        - Positivity of gamma_x
+        - Normalization and consistency conditions
+        - Energy constraints on gamma_x
+        - Bell inequality value ≥ nonEABellValue
 
+    Parameters
+    ----------
+    w0Avg, w1Avg : float
+        Average energy constraints for inputs x = 0 and x = 1.
+    w0Peak, w1Peak : float
+        Peak energy values for inputs x = 0 and x = 1.
+    nonEABellValue : float
+        Classical (non-entanglement-assisted) Bell inequality value.
+    precision : float
+        Numerical precision used for solver tolerances.
+
+    Returns
+    -------
+    float
+        Optimal (maximum) guessing probability achievable by Eve.
+    """
+    # --- Initialize the optimization problem ---
+    prob = pic.Problem()
+
+    # Define symmetric moment matrices gamma0 and gamma1 (one per input)
+    gamma0 = pic.SymmetricVariable("gamma00", (4, 4))
+    gamma1 = pic.SymmetricVariable("gamma01", (4, 4))
+    gammas = [gamma0, gamma1]
+
+    # Positivity of the moment matrices
     for gamma in gammas:
-        prob.add_constraint(gamma>>0)
-    addNormalizationConstraints(prob,gammas)
-    addEnergyConstraints(prob,gammas,w0Avg, w1Avg,w0Peak,w1Peak)
+        prob.add_constraint(gamma >> 0)
 
-    #Eve's guessing probability
-    E00,E10=gamma0[0,2],gamma0[1,2]
-    E01,E11=gamma1[0,2],gamma1[1,2]
+    # Add normalization and energy constraints
+    addNormalizationConstraints(prob, gammas)
+    addEnergyConstraints(prob, gammas, w0Avg, w1Avg, w0Peak, w1Peak)
 
-    E0=E00+E01
-    E1=E10+E11
-    p00=1/2*(1+E0)
-    p10=1-p00
-    p01=1/2*(1+E1)
-    p11=1-p01
-    
-    tol=1e-6
-    prob.add_constraint(p00-p10-p01+p11>=nonEABellValue-tol)
-    
-    pg0=1/2*(1+E00-E01)
-    pg1=1/2*(1+E10-E11)
-    prob.set_objective('max',pg0)
+    # --- Define Bell correlators and probabilities ---
+    # E_xy = ⟨A_x B_y⟩ terms
+    E00, E10 = gamma0[0, 2], gamma0[1, 2]
+    E01, E11 = gamma1[0, 2], gamma1[1, 2]
+
+    # E0, E1 represent marginal combinations over Bob’s outcomes
+    E0 = E00 + E01
+    E1 = E10 + E11
+
+    # Classical joint probabilities p(a|x)
+    p00 = 0.5 * (1 + E0)
+    p10 = 1 - p00
+    p01 = 0.5 * (1 + E1)
+    p11 = 1 - p01
+
+    # --- Bell inequality constraint ---
+    tol = 1e-6
+    prob.add_constraint(p00 - p10 - p01 + p11 >= nonEABellValue - tol)
+
+    # --- Objective: Eve's guessing probability ---
+    pg0 = 0.5 * (1 + E00 - E01)
+    pg1 = 0.5 * (1 + E10 - E11)
+    prob.set_objective("max", pg0)
+
+    # --- Set solver precision and solve ---
     setNumericalPrecisionForSolver(prob, precision)
-    
-    prob.solve(solver = "mosek", verbosity=False)
-    
+    prob.solve(solver="mosek", verbosity=False)
+
     return prob.value
 
 
@@ -331,7 +483,7 @@ def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue,
     PiSA0, PiSA1 = measurement
     problem = Problem()
 
-    # Four states: ρ_{S,A}^{x,g} where x ∈ {0,1}, g ∈ {0,1}
+    # Four states: rho_{S,A}^{x,g} where x in {0,1}, g in {0,1}
     states = [pic.HermitianVariable(f"phi_{a}", shape=(dimS * dimM, dimS * dimM)) for a in range(4)]
     problem.add_list_of_constraints([rho >> 0 for rho in states])
 
@@ -366,7 +518,7 @@ def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue,
     problem.add_constraint(pic.trace(np.kron(ground, np.eye(dimM)) * sigmaSA0) >= 1 - w0)
     problem.add_constraint(pic.trace(np.kron(ground, np.eye(dimM)) * sigmaSA1) >= 1 - w1)
 
-    # Objective: Guessing probability for x=0
+    # Objective: Guessing probability for x = 0
     objective = pic.trace(states[0] * PiSA0) + pic.trace(states[1] * PiSA1)
     problem.set_objective("max", objective)
 
@@ -841,8 +993,8 @@ def plot_deterministic_inequality_violation(data_source,
                 parts = [p.strip() for p in line.split(",")]
                 try:
                     omega.append(float(parts[0]))
-                    ea.append(float(parts[1]))
-                    non_ea.append(float(parts[2]))
+                    non_ea.append(float(parts[1]))
+                    ea.append(float(parts[2]))
                 except (ValueError, IndexError):
                     continue
         omega, ea, non_ea = np.array(omega), np.array(ea), np.array(non_ea)
@@ -852,7 +1004,7 @@ def plot_deterministic_inequality_violation(data_source,
         data_source = np.array(data_source)
         if data_source.shape[1] != 3:
             raise ValueError("In-memory data must have 3 columns: (omega, ea, non_ea)")
-        omega, ea, non_ea = data_source[:, 0], data_source[:, 1], data_source[:, 2]
+        omega, non_ea, ea = data_source[:, 0], data_source[:, 1], data_source[:, 2]
         print("Using in-memory data (not loaded from file).")
 
 

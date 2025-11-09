@@ -14,35 +14,25 @@ Results are stored as tuples (w, non_EA_value, EA_value) and optionally saved to
 """
 
 if __name__ == "__main__":
-    # ----------------------------------------------------------------------
-    # Configuration
-    # ----------------------------------------------------------------------
-    save = True  # Set to False if you don't want to save results
-    output_filename = "data_viol_det_ineq.txt"
 
-    energyrange = np.arange(0.30, 0.50, 0.01)
+    # Parameters
+    energyrange = np.arange(0.20, 0.21, 0.01)
     dimS, dimM = 2, 3
-    max_restarts = 100000       # number of random restarts
-    num_trials = 5              # number of independent minimizations per w
-    tol = 1e-3                  # convergence threshold
+    num_trials = 1              # number of independent minimizations per w
+    tol = 1e-8                  # convergence threshold
     error = 1e-4
-    precisionopt = 1e-4         # solver precision
+    precisionopt = 1e-8         # solver precision
 
     results = []
 
-    # ----------------------------------------------------------------------
     # Prepare Data directory
-    # ----------------------------------------------------------------------
+    save = False  # Set to False if you don't want to save results
+    output_file = "data_viol_det_ineq.txt"
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
-
-    if save:
-        os.makedirs(data_dir, exist_ok=True)
-        data_path = os.path.join(data_dir, output_filename)
-        print(f"Saving results to {data_path}")
-    else:
-        data_path = None
-        print("Saving disabled (save=False).")
+    data_path = os.path.join(data_dir, output_file)
+    os.makedirs(data_dir, exist_ok=True)
+ 
 
     # ----------------------------------------------------------------------
     # Main loop over energy values
@@ -52,7 +42,7 @@ if __name__ == "__main__":
         w0Avg, w1Avg = w, w
         nonEA_E1value = 2 * (1 - 2 * w)**2 - 1
 
-        best_EA_value = np.inf  # we minimize over the 5 trials
+        best_EA_value = np.inf  # we minimize over the num_trials trials
         success_any = False
 
         for trial in range(num_trials):
@@ -62,7 +52,7 @@ if __name__ == "__main__":
             newE1value = np.nan
 
             # --- Multiple random initializations for this trial ---
-            for attempt in range(max_restarts):
+            while True:
                 try:
                     # Random initial measurement
                     PiSA0 = qt.ket2dm(
@@ -79,8 +69,14 @@ if __name__ == "__main__":
                         dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
                     )
                     oldE1value = 0
+                    
+                    max_iters = 100  # avoid getting stuck in the inner loop
+                    iters = 0
 
-                    while newE1value - oldE1value > tol or newE1value - nonEA_E1value > -error:
+                    while (
+                        newE1value - oldE1value > tol
+                        or newE1value - nonEA_E1value > -error
+                    ) and iters < max_iters:
                         oldE1value = newE1value
                         measurement = findMeasurementMinViolDet(
                             dimS, dimM, states, precisionopt
@@ -88,9 +84,10 @@ if __name__ == "__main__":
                         newE1value, states = findStateMinViolDet(
                             dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
                         )
+                        iters += 1
 
                     success = True
-                    break  # converged → stop restarts for this trial
+                    break  # found a valid result → stop
 
                 except pic.SolutionFailure:
                     continue  # retry random initialization
@@ -107,9 +104,9 @@ if __name__ == "__main__":
         results.append((w0Avg, nonEA_E1value, best_EA_value))
         print(f" → Final EA(min) = {best_EA_value:.6f}, non-EA = {nonEA_E1value:.6f}")
 
-    # ----------------------------------------------------------------------
-    # Save results (if enabled)
-    # ----------------------------------------------------------------------
+    # ------------------------------------------------------------
+    # Save results to file
+    # ------------------------------------------------------------
     if save:
         np.savetxt(
             data_path,
@@ -127,7 +124,7 @@ if __name__ == "__main__":
     # Plot results
     # ----------------------------------------------------------------------
     plot_deterministic_inequality_violation(
-        results,
+        "Data/data_viol_det_ineq.txt",  # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_viol_det_ineq.png",
-        save=True
+        save=False
     )

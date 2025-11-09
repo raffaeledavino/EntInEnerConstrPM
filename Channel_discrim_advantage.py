@@ -3,8 +3,8 @@ import qutip as qt
 import sympy as sp
 from tqdm import tqdm
 import os
-from utils import *
 from ncpol2sdpa import generate_variables, SdpRelaxation
+from utils import *
 
 """
 Script to compute and compare various distinguishability measures
@@ -28,6 +28,8 @@ if __name__ == "__main__":
     omega_num = 2
     p_values = np.linspace(0.00, 0.002, 3)
     save  = False
+
+    # Variables initialization
     p_opt = np.zeros(omega_num)
     diamond_dist_EC_list = np.zeros(omega_num)
     diamond_dist_noEC_list = np.zeros(omega_num)
@@ -215,6 +217,9 @@ if __name__ == "__main__":
 
     results = np.column_stack((omega, ea, non_ea))
 
+# ----------------------------------------------------------------------
+# Stack and save results
+# ----------------------------------------------------------------------
     if save:
         with open(data_path, "w") as f:
             f.write("# omega, entangled_adv, non_entangled_adv\n")
@@ -229,7 +234,7 @@ if __name__ == "__main__":
     # Plot results
     # ----------------------------------------------------------------------
     plot_channel_discrimination_advantage(
-        results,
+        results,    # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_channel_discr_adv.png",
         save=True
     )

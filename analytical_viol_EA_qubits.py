@@ -15,31 +15,24 @@ between them for each w.
 Results are saved to 'Data/data_EA_viol_analytic.txt' unless save=False.
 """
 
-# ----------------------------------------------------------------------
-# Configuration
-# ----------------------------------------------------------------------
-save = True  # Set to False if you don’t want to save results
-output_filename = "data_EA_viol_analytic.txt"
+
+# Parameters
 omega_num = 50
 p_values = np.linspace(0.01, 0.50, 1000)
 
-# ----------------------------------------------------------------------
 # Prepare output directory
-# ----------------------------------------------------------------------
+save = True  # Set to False if you don’t want to save results
+output_file = "data_EA_viol_analytic.txt" 
 base_dir = os.path.dirname(__file__)
 data_dir = os.path.join(base_dir, "Data")
-if save:
-    os.makedirs(data_dir, exist_ok=True)
-    output_path = os.path.join(data_dir, output_filename)
-    print(f"Saving results to {output_path}")
-else:
-    output_path = None
-    print("Saving disabled (save=False).")
+data_path = os.path.join(data_dir, output_file)
+os.makedirs(data_dir, exist_ok=True)
 
-# ----------------------------------------------------------------------
-# Basis and variable initialization
-# ----------------------------------------------------------------------
+
+# Basis definitions for a two-qubit (4-dimensional) Hilbert space
 b00, b01, b10, b11 = [qt.basis(4, i) for i in range(4)]
+
+# Variables initialization
 EA_viol_analytic = np.zeros(omega_num)
 p_opt = np.zeros(omega_num)
 
@@ -86,13 +79,13 @@ data_to_save = np.column_stack((omega, p_opt, EA_viol_analytic))
 
 if save:
     np.savetxt(
-        output_path,
+        data_path,
         data_to_save,
         fmt="%.6f",
         header="omega p_opt EA_viol_analytic",
         comments="# "
     )
-    print(f"\n Data successfully saved to {output_path}")
+    print(f"\n Data successfully saved to {data_path}")
 else:
     print("\n Results were not saved (save=False).")
 

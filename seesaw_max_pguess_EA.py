@@ -13,26 +13,19 @@ unless save=False is specified.
 
 if __name__ == "__main__":
 
-
-    # Configuration
-    save = True  # Set to False if you don't want to save result
-    output_file = 'data_avg_pg.txt'
-    energyrange = np.arange(0.01, 0.51, 0.01)
+    # Parameters
+    energyrange = np.arange(0.01, 0.50, 0.01)
     num_attempts = 10
     dim, dimM = 2, 3
     precision = 1e-12
 
+    # Prepare output directory
+    save = False  # Set to False if you don't want to save result
+    output_file = 'data_avg_pg.txt'
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
     data_path = os.path.join(data_dir, output_file)
     os.makedirs(data_dir, exist_ok=True)
-    #if save:
-    #    os.makedirs(data_dir, exist_ok=True)
-    #    data_path = os.path.join(data_dir, output_file)
-    #    print(f"Saving results to {data_path}")
-    #else:
-    #    data_path = None
-    #    print("Saving disabled (save=False).")
     
     # ------------------------------------------------------------
     # Main computation loop
@@ -99,7 +92,8 @@ if __name__ == "__main__":
     # ----------------------------------------------------------------------
     # Plot results
     # ----------------------------------------------------------------------
-    plot_min_entropy(results,
-                     save_as="Fig_pguess.png",
-                     save=True
+    plot_min_entropy(
+        "Data/data_avg_pg.txt",   # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
+        save_as="Fig_pguess.png",
+        save=False
     )
