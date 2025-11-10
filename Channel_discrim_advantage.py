@@ -25,7 +25,7 @@ different distinguishability measures under energy constraints.
 
 if __name__ == "__main__":
     # Parameters
-    omega_num = 2
+    omega_num = 50
     p_values = np.linspace(0.00, 0.002, 3)
     save  = False
 
