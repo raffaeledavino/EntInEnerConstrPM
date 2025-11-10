@@ -126,5 +126,5 @@ if __name__ == "__main__":
     plot_deterministic_inequality_violation(
         "Data/data_viol_det_ineq.txt",  # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_viol_det_ineq.png",
-        save=False
+        save=True
     )

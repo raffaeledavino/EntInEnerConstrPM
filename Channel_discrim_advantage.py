@@ -26,8 +26,15 @@ different distinguishability measures under energy constraints.
 if __name__ == "__main__":
     # Parameters
     omega_num = 50
-    p_values = np.linspace(0.00, 0.002, 3)
-    save  = False
+    p_values = np.linspace(0.00, 0.001, 2)
+
+    # Prepare output directory
+    save = False  # Set to False if you don't want to save result
+    output_file = "data_channel_discr_adv.txt"
+    base_dir = os.path.dirname(__file__)
+    data_dir = os.path.join(base_dir, "Data")
+    data_path = os.path.join(data_dir, output_file)
+    os.makedirs(data_dir, exist_ok=True)
 
     # Variables initialization
     p_opt = np.zeros(omega_num)
@@ -73,7 +80,7 @@ if __name__ == "__main__":
         
             
 
-            # Build operator A from the eigenbasis of sigma_SA^0
+            # Build operator A from the eigenbasis of sigma_SA^0 (Eq. C15)
             A = qt.Qobj([
                 [np.sqrt(2) * eigenvectors0[3][0][0][0], np.sqrt(2) * eigenvectors0[3][1][0][0]],
                 [np.sqrt(2) * eigenvectors0[3][2][0][0], np.sqrt(2) * eigenvectors0[3][3][0][0]]
@@ -89,14 +96,14 @@ if __name__ == "__main__":
                 [np.sqrt(2) * eigenvectors1[3][2][0][0], np.sqrt(2) * eigenvectors1[3][3][0][0]]
             ])
             
-            # Kraus operators of the effective channel
+            # Kraus operators of the effective channel (Eq. C13)
             E0 = np.sqrt(eigenvalues1[2])*B0*A.inv()
             E1 = np.sqrt(eigenvalues1[3])*B1*A.inv()
             
+
             # ---------------------------------------------------------------------
             # 1. Upper bound on the entanglement advantage without energy constraint.
             # ---------------------------------------------------------------------
-            
             
             # Compute diamond distance (no EC)  
             kraus = [E0, E1]
@@ -124,11 +131,11 @@ if __name__ == "__main__":
 
             ind_trace_dist_noEC = 2 * new_norm_max
 
+
             # ---------------------------------------------------------------------
             # 2. Lower bound on the entanglement advantage
             # in the energy-constrained scenario.
             # ---------------------------------------------------------------------
-
 
             # Compute a lower bound on the diamond distance (EC)
             diamond_dist_EC = 2 * qt.metrics.tracedist(sigmaSA0, sigmaSA1)
@@ -140,7 +147,6 @@ if __name__ == "__main__":
             # Variables:
             # x[0:3]  → Measurement operator M (2×2 Hermitian)
             # x[4:6]  → State psi (2×2 Hermitian, parametrized by Bloch components)
-            
             M = sp.Matrix([
                 [x[0],        x[1] + 1j * x[2]],
                 [x[1] - 1j * x[2],  x[3]]
@@ -151,15 +157,11 @@ if __name__ == "__main__":
                 [x[5] - 1j * x[6], 1 - x[4]]
             ])
 
-
             # Channel action on psi
             E0_psi_E0dag = E0_sym * psi * E0_sym.H
             E1_psi_E1dag = E1_sym * psi * E1_sym.H
 
-            # ---------------------------------------------------------------------
             # Inequalities: physical constraints (positivity, normalization, etc.)
-            # ---------------------------------------------------------------------
-
             inequalities = [
                 # Positivity of M
                 x[0], x[3], x[0] * x[3] - x[1] ** 2 - x[2] ** 2,
@@ -192,21 +194,14 @@ if __name__ == "__main__":
             fraction_EC = (1 + 0.5 * diamond_dist_EC) / (1 + 0.5 * ind_trace_dist_EC)
             
             
-            if fraction_EC/fraction_noEC>=advantage:
-                advantage = fraction_EC/fraction_noEC
+            if fraction_EC>=advantage:
+                advantage = fraction_EC
                 p_opt[count] = p
                 diamond_dist_noEC_list[count] = diamond_dist_noEC
                 ind_trace_dist_noEC_list[count] = ind_trace_dist_noEC 
                 diamond_dist_EC_list[count] = diamond_dist_EC
                 ind_trace_dist_EC_list[count] = ind_trace_dist_EC
 
-
-    # Define base and data directories
-    base_dir = os.path.dirname(__file__)
-    data_dir = os.path.join(base_dir, "Data")
-    os.makedirs(data_dir, exist_ok=True)
-
-    data_path = os.path.join(data_dir, "data_channel_discr_adv.txt")
 
 
     # Stack the arrays column-wise (each column: omega, non-entangled, entangled)
@@ -217,9 +212,9 @@ if __name__ == "__main__":
 
     results = np.column_stack((omega, ea, non_ea))
 
-# ----------------------------------------------------------------------
-# Stack and save results
-# ----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
+    # Stack and save results
+    # ----------------------------------------------------------------------
     if save:
         with open(data_path, "w") as f:
             f.write("# omega, entangled_adv, non_entangled_adv\n")
@@ -236,5 +231,5 @@ if __name__ == "__main__":
     plot_channel_discrimination_advantage(
         results,    # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_channel_discr_adv.png",
-        save=True
+        save=False
     )

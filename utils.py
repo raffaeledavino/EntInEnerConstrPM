@@ -1018,7 +1018,7 @@ def plot_deterministic_inequality_violation(data_source,
 
     ax.set_xlabel(r'$\omega$', fontsize=14)
     ax.tick_params(axis='both', labelsize=12)
-    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.grid(True, alpha=0.6)
     ax.legend(fontsize=12)
 
     # ------------------------------------------------------------------
@@ -1102,7 +1102,7 @@ def plot_channel_discrimination_advantage(data_source,
 
     ax.set_xlabel(r'$\omega$', fontsize=14)
     ax.tick_params(axis='both', labelsize=12)
-    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.grid(True, alpha=0.6)
     ax.legend(fontsize=12, loc='best')
 
     # ------------------------------------------------------------------
