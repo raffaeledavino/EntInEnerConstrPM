@@ -4,26 +4,25 @@ import picos as pic
 import qutip as qt
 from utils import *
 
-
 """
 Performs a seesaw optimization to find the maximum Bell-inequality violation
 (both energy-assisted and non-energy-assisted) for a range of energy parameters w.
 
-Results are stored as tuples (w, non_EA_value, EA_value) and optionally saved to:
-'Data/data_viol_det_ineq.txt'
+Results are saved to 'Data/data_viol_det_ineq.txt' as tuples
+(omega, non_EA_value, EA_value) , unless save=False is specified.
 """
 
 if __name__ == "__main__":
 
     # Parameters
-    energyrange = np.arange(0.20, 0.21, 0.01)
+    energyrange = np.arange(0.01, 0.50, 0.01)   # Note: for small omega values, the optimization may take 
+                                                # significantly longer to find a feasible solution
     dimS, dimM = 2, 3
-    num_trials = 1              # number of independent minimizations per w
-    tol = 1e-8                  # convergence threshold
+    num_trials = 10             # Number of independent minimizations per w
+    tol = 1e-8                  # Convergence threshold
     error = 1e-4
-    precisionopt = 1e-8         # solver precision
+    precisionopt = 1e-8         # Solver precision
 
-    results = []
 
     # Prepare Data directory
     save = False  # Set to False if you don't want to save results
@@ -37,6 +36,8 @@ if __name__ == "__main__":
     # ----------------------------------------------------------------------
     # Main loop over energy values
     # ----------------------------------------------------------------------
+    results = []
+
     for w in energyrange:
         print(f"\n⟶ Energy parameter: w = {w:.2f}")
         w0Avg, w1Avg = w, w
@@ -124,7 +125,7 @@ if __name__ == "__main__":
     # Plot results
     # ----------------------------------------------------------------------
     plot_deterministic_inequality_violation(
-        "Data/data_viol_det_ineq.txt",  # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
+        results,  # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_viol_det_ineq.png",
-        save=True
+        save=False
     )

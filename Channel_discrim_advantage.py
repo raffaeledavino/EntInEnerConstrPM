@@ -7,25 +7,20 @@ from ncpol2sdpa import generate_variables, SdpRelaxation
 from utils import *
 
 """
-Script to compute and compare various distinguishability measures
-(trace distance, diamond norm, induced norm, etc.)
-for a parametrized pair of quantum states sigma_SA^0 and sigma_SA^1.
+Script to compute the diamond distance and the induced trace norm between the identity channel
+and the channel defined in Appendix C. These quantities are used to construct the upper bound
+on the guessing probability advantage without an energy constraint (Eq. (22)), and the lower
+bound with an energy constraint (Eq. (23)).
 
-For each energy parameter omega, the script scans over a small range of noise
-parameters p and computes:
-
-  • Optimal trace distance between sigma_SA^0 and sigma_SA^1
-  • Diamond norm distance of the corresponding channel
-  • Induced trace distance (with and without error correction)
-  • Advantage ratio (fraction_ec / fraction_no_ec)
-
-The results can be used to analyze the relationship between
-different distinguishability measures under energy constraints.
+Results are saved to 'Data/data_channel_discr_adv.txt' as tuples
+(omega, entangled_adv, non_entangled_adv), unless save=False is specified.
 """
 
 if __name__ == "__main__":
+
     # Parameters
-    omega_num = 50
+    energyrange = np.arange(0.01, 0.50, 0.01)
+    num_omega = 50
     p_values = np.linspace(0.00, 0.001, 2)
 
     # Prepare output directory
@@ -37,19 +32,19 @@ if __name__ == "__main__":
     os.makedirs(data_dir, exist_ok=True)
 
     # Variables initialization
-    p_opt = np.zeros(omega_num)
-    diamond_dist_EC_list = np.zeros(omega_num)
-    diamond_dist_noEC_list = np.zeros(omega_num)
-    ind_trace_dist_noEC_list = np.zeros(omega_num)
-    ind_trace_dist_EC_list = np.zeros(omega_num)
+    num_omega = len(energyrange)
+    p_opt = np.zeros(num_omega)
+    diamond_dist_EC_list = np.zeros(num_omega)
+    diamond_dist_noEC_list = np.zeros(num_omega)
+    ind_trace_dist_noEC_list = np.zeros(num_omega)
+    ind_trace_dist_EC_list = np.zeros(num_omega)
 
     # Basis definitions for a two-qubit (4-dimensional) Hilbert space
     b00, b01, b10, b11 = [qt.basis(4, i) for i in range(4)]
 
-    for count in tqdm(range(omega_num)):
+    for count, w in enumerate(tqdm(energyrange)):
 
-        w = (count + 1) * 0.01
-        advantage = 0
+        advantage = -np.inf
 
         for p in p_values:
             # Build joint states sigma_SA^0 and sigma_SA^1 (as in the paper)
@@ -205,7 +200,7 @@ if __name__ == "__main__":
 
 
     # Stack the arrays column-wise (each column: omega, non-entangled, entangled)
-    omega = np.array([(i + 1) * 0.01 for i in range(omega_num)])
+    omega = np.array([(i + 1) * 0.01 for i in range(num_omega)])
 
     non_ea = (1 + 0.5 * np.array(diamond_dist_noEC_list)) / (1 + 0.5 * np.array(ind_trace_dist_noEC_list))
     ea = (1 + 0.5 * np.array(diamond_dist_EC_list)) / (1 + 0.5 * np.array(ind_trace_dist_EC_list))

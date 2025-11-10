@@ -7,20 +7,21 @@ from utils import *
 Script to compute quantum quantum guessing probabilities in Eq. (8)
 for different energy values.
 
-Results are saved to 'Data/data_avg_pg.txt' as tuples (w, cPguess, qPguess_min),
+Results are saved to 'Data/data_avg_pg.txt' as tuples (omega, cPguess, qPguess_min),
 unless save=False is specified.
 """
 
 if __name__ == "__main__":
 
     # Parameters
-    energyrange = np.arange(0.01, 0.50, 0.01)
-    num_attempts = 10
+    energyrange = np.concatenate(([0.001], np.arange(0.01, 0.51, 0.01)))
     dim, dimM = 2, 3
-    precision = 1e-12
+    num_trials = 10         # number of independent minimizations per w
+    tol = 1e-9              # Convergence threshold
+    precision = 1e-8        # solver precision
 
     # Prepare output directory
-    save = False  # Set to False if you don't want to save result
+    save = True  # Set to False if you don't want to save result
     output_file = 'data_avg_pg.txt'
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     results = []
 
     for w in energyrange:
-        print(f"\n⟶ Energy parameter: w = {w:.2f}")
+        print(f"\n⟶ Energy parameter: w = {w:.3f}")
 
         w0Avg, w1Avg = w, w
 
@@ -42,9 +43,8 @@ if __name__ == "__main__":
         cPguess = ComputeGuessingProbability(w0Avg, w1Avg, 1, 1, nonEABellValue, precision)
 
         qPguess_min = 0.0
-        for attempt in range(num_attempts):
+        for attempt in range(num_trials):
             qPguess = cPguess
-            tol = 1e-9
 
             while qPguess < cPguess + tol:
                 if w > 0.46:  # numerical safeguard for high energy
@@ -75,14 +75,14 @@ if __name__ == "__main__":
             qPguess_min = max(qPguess_min, qPguess)
 
         results.append((w0Avg, cPguess, qPguess_min))
-        print(f"Result: w={w0Avg:.2f}, cP={cPguess:.6f}, qP={qPguess_min:.6f}")
+        print(f"Result: w={w0Avg:.3f}, cP={cPguess:.6f}, qP={qPguess_min:.6f}")
 
     # ------------------------------------------------------------
     # Save results to file
     # ------------------------------------------------------------
     if save:
         with open(data_path, "w") as f:
-            f.write("# w0Avg, cPguess, qPguess_min\n")
+            f.write("# omega, cPguess, qPguess_min\n")
             for w, c, q in results:
                 f.write(f"{w:.6f}, {c:.8f}, {q:.8f}\n")
         print(f"\n Results successfully saved to {data_path}")
@@ -95,5 +95,5 @@ if __name__ == "__main__":
     plot_min_entropy(
         "Data/data_avg_pg.txt",   # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_pguess.png",
-        save=False
+        save=True
     )

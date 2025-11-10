@@ -4,22 +4,23 @@ import qutip as qt
 import os
 from utils import * 
 
-if __name__ == "__main__":
-    """
-    Performs a seesaw optimization to find the maximum Bell-inequality violation
-    (both entanglement-assisted and non-entanglement-assisted) for a range of
-    energy parameters omega.
+"""
+Performs a seesaw optimization to find the maximum Bell-inequality violation
+(both entanglement-assisted and non-entanglement-assisted) for a range of
+energy parameters omega.
 
-    Results are saved as (omega, non_EA, EA, EA_analytic) to:
-        ./Data/data_EA_max_viol.txt
-    """
+Results are saved to 'Data/data_viol_det_ineq.txt' as tuples
+(omega, non_EA, EA, EA_analytic), unless save=False is specified.
+"""
+
+if __name__ == "__main__":
 
     # Paramaters
     energyrange = np.arange(0.01, 0.51, 0.01)
     dimS, dimM = 2, 3
-    max_restarts = 20        # Number of random restarts
+    num_trials = 20        # number of independent minimizations per w
     tol = 1e-7               # Convergence threshold
-    precisionopt = 1e-12     # Solver precision for PICOS
+    precisionopt = 1e-12     # Solver precision
 
 
     # ----------------------------------------------------------------------
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     # Main loop over energy values
     # ------------------------------------------------------------------
     results = []
-    
+
     for i, (w, ea_analytic_val) in enumerate(zip(energyrange, EAvalue_analytic)):
         print(f"⟶ Energy parameter: w = {w:.2f}")
 
@@ -58,7 +59,7 @@ if __name__ == "__main__":
         success = False
 
         # Try multiple random initializations until one converges
-        for attempt in range(max_restarts):
+        for attempt in range(num_trials):
             try:
                 # Initialize measurement operator and ground state
                 PiSA0 = qt.ket2dm(
@@ -85,8 +86,6 @@ if __name__ == "__main__":
                     newEAvalue, states = findStateMaxViolation(
                         dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
                     )
-                    
-                    #newEAvalue = sum(behavior[k] * ineq[k] for k in range(4))
 
                 success = True
                 break  # Exit retry loop upon success
@@ -97,7 +96,7 @@ if __name__ == "__main__":
 
         if not success:
             raise RuntimeError(
-                f"Seesaw optimization failed for w = {w:.2f} after {max_restarts} restarts."
+                f"Seesaw optimization failed for w = {w:.2f} after {num_trials} restarts."
             )
 
         # ------------------------------------------------------------------
