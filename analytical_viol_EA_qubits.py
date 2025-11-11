@@ -17,11 +17,11 @@ Results are saved to 'Data/data_EA_viol_analytic.txt' unless save=False.
 
 
 # Parameters
-omega_num = 50
+energyrange = np.arange(0.01, 0.50, 0.01)
 p_values = np.linspace(0.01, 0.50, 1000)
 
 # Prepare output directory
-save = True  # Set to False if you don’t want to save results
+save = False        # Set to False if you don’t want to save results
 output_file = "data_EA_viol_analytic.txt" 
 base_dir = os.path.dirname(__file__)
 data_dir = os.path.join(base_dir, "Data")
@@ -33,14 +33,14 @@ os.makedirs(data_dir, exist_ok=True)
 b00, b01, b10, b11 = [qt.basis(4, i) for i in range(4)]
 
 # Variables initialization
-EA_viol_analytic = np.zeros(omega_num)
+num_omega = len(energyrange)
 p_opt = np.zeros(omega_num)
+EA_viol_analytic = np.zeros(omega_num)
 
 # ----------------------------------------------------------------------
 # Main computation loop
 # ----------------------------------------------------------------------
-for count in tqdm(range(omega_num), desc="Computing EA violations"):
-    w = (count + 1) * 0.01
+for w in tqdm(energyrange, desc="Computing EA violations"):
 
     for p in p_values:
         # Build analytical states sigma_SA^0 and sigma_SA^1 (Appendix C)

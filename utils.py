@@ -12,13 +12,13 @@ from picos.modeling.problem import Problem
 # ----------------------------------------------------------------------
 # Configure numerical precision for PICOS solvers
 # ----------------------------------------------------------------------
-def setNumericalPrecisionForSolver(problem, precision):
+def setNumericalPrecisionForSolver(problem):
     """
     Sets high numerical precision parameters for PICOS solvers.
     """
-    problem.options["rel_ipm_opt_tol"] = precision
-    problem.options["rel_prim_fsb_tol"] = precision
-    problem.options["rel_dual_fsb_tol"] = precision
+    problem.options["rel_ipm_opt_tol"] = 1e-8
+    problem.options["rel_prim_fsb_tol"] = 1e-8
+    problem.options["rel_dual_fsb_tol"] = 1e-8
     problem.options["max_footprints"] = None
 
 
@@ -29,7 +29,7 @@ def setNumericalPrecisionForSolver(problem, precision):
 # ----------------------------------------------------------------------
 
 # Compute the maximum I_corr violation without entanglement (Eq. (7))
-def computeMaxIneqViolation(w1, w2, precision):
+def computeMaxIneqViolation(w1, w2):
     """
     Compute the maximal value of I_corr (Eq. 7) under separable
     (non-entangled) strategies using semidefinite programming.
@@ -40,8 +40,6 @@ def computeMaxIneqViolation(w1, w2, precision):
         Average energy parameter for the first state.
     w2 : float
         Average energy parameter for the second state.
-    precision : float
-        Numerical precision tolerance for the solver (e.g. 1e-8).
 
     Returns
     -------
@@ -93,7 +91,7 @@ def computeMaxIneqViolation(w1, w2, precision):
     prob.set_objective("max", objective)
 
     # Set numerical precision and solve
-    setNumericalPrecisionForSolver(prob, precision)
+    setNumericalPrecisionForSolver(prob)
     prob.solve(solver="mosek", verbosity=False)
 
     # Return optimal value and probabilities
@@ -103,7 +101,7 @@ def computeMaxIneqViolation(w1, w2, precision):
 
 # Seesaw in which we fix the states and optimize
 # over the measurement to maximize I_corr (Eq. 6)
-def findMeasurementMaxViol(dimS, dimM, states, precision):
+def findMeasurementMaxViol(dimS, dimM, states):
     """
     Given the system and ancilla states sigma_SA^x, find the optimal
     two-outcome measurement {Pi_SA^0, Pi_SA^1} that maximizes I_corr.
@@ -116,8 +114,7 @@ def findMeasurementMaxViol(dimS, dimM, states, precision):
         Dimension of the ancilla (or measurement register).
     states : list of np.ndarray
         List containing two bipartite density matrices [sigma_SA^0, sigma_SA^1].
-    precision : float
-        Numerical precision used by the SDP solver.
+
 
     Returns
     -------
@@ -145,7 +142,7 @@ def findMeasurementMaxViol(dimS, dimM, states, precision):
     )
 
     problem.set_objective("max", objective)
-    setNumericalPrecisionForSolver(problem, precision)
+    setNumericalPrecisionForSolver(problem)
 
     problem.solve(verbosity=False)
 
@@ -158,7 +155,7 @@ def findMeasurementMaxViol(dimS, dimM, states, precision):
 
 # Seesaw in which we fix the measurement and optimize
 # over the states to maximize I_corr (Eq. 6)
-def findStateMaxViolation(dimS, dimM, w0, w1, measurement, ground, precision):
+def findStateMaxViolation(dimS, dimM, w0, w1, measurement, ground):
     """
     Given a fixed measurement, find the optimal bipartite states
     sigma_SA^0 and sigma_SA^1 that maximize I_corr, under energy constraints.
@@ -173,8 +170,6 @@ def findStateMaxViolation(dimS, dimM, w0, w1, measurement, ground, precision):
         Measurement operators [Pi_SA^0, Pi_SA^1].
     ground : np.ndarray
         Ground state projector on the system.
-    precision : float
-        Numerical precision used by the SDP solver.
 
     Returns
     -------
@@ -219,7 +214,7 @@ def findStateMaxViolation(dimS, dimM, w0, w1, measurement, ground, precision):
     )
 
     problem.set_objective("max", objective)
-    setNumericalPrecisionForSolver(problem, precision)
+    setNumericalPrecisionForSolver(problem)
 
     problem.solve(verbosity=False)
 
@@ -244,7 +239,7 @@ def addNormalizationConstraints(prob, gammas):
     """
     Enforces normalization constraints on the list of moment matrices gamma.
 
-    Each gamma corresponds to a conditional probability distribution p(γ),
+    Each gamma corresponds to a conditional probability distribution p(gamma),
     which appears as gamma[0,0] on the diagonal. The constraint ensures that:
         - p(gamma) ≥ 0
         - gamma[i,i] = p(gamma) for i = 1, 2, 3
@@ -324,67 +319,8 @@ def addEnergyConstraints(prob, gammas, w0Avg, w1Avg, w0Peak, w1Peak):
     prob.add_constraint(sum(w1_vars) <= w1Avg)
 
 
-""" def computeGuessingProbability(w0Avg, w1Avg,w0Peak,w1Peak,expectedBehavior):
-    prob=pic.Problem()
-
-    gamma00=pic.SymmetricVariable('gamma00',(4,4))
-    gamma01=pic.SymmetricVariable('gamma01',(4,4))
-    gammas0=[gamma00,gamma01]
-
-    gamma10=pic.SymmetricVariable('gamma10',(4,4))
-    gamma11=pic.SymmetricVariable('gamma11',(4,4))
-    gammas1=[gamma10,gamma11]
-    
-    for gamma in gammas0:
-        prob.add_constraint(gamma>>0)
-    addNormalizationConstraints(prob,gammas0)
-    addEnergyConstraints(prob,gammas0,w0Avg, w1Avg,w0Peak,w1Peak)
-    
-    for gamma in gammas1:
-        prob.add_constraint(gamma>>0)
-    addNormalizationConstraints(prob,gammas1)
-    addEnergyConstraints(prob,gammas1,w0Avg, w1Avg,w0Peak,w1Peak)
-    
-    #Eve's guessing probability
-    E000,E100=gamma00[0,2],gamma00[1,2]
-    E001,E101=gamma01[0,2],gamma01[1,2]
-    E010,E110=gamma10[0,2],gamma10[1,2]
-    E011,E111=gamma11[0,2],gamma11[1,2]
-    
-    E0=E000+E001
-    E1=E110+E111
-    p00=1/2*(1+E0)
-    p10=1-p00
-    p01=1/2*(1+E1)
-    p11=1-p01
-    
-    prob.add_constraint(E000+E001==E010+E011)
-    prob.add_constraint(E100+E101==E110+E111)
- 
-    tol = 1e-6
-    prob.add_constraint(p00<=expectedBehavior[0]+tol)
-    prob.add_constraint(p00>=expectedBehavior[0]-tol)
-    
-    prob.add_constraint(p10<=expectedBehavior[1]+tol)
-    prob.add_constraint(p10>=expectedBehavior[1]-tol)
-    
-    prob.add_constraint(p01<=expectedBehavior[2]+tol)
-    prob.add_constraint(p01>=expectedBehavior[2]-tol)
-    
-    prob.add_constraint(p11<=expectedBehavior[3]+tol)
-    prob.add_constraint(p11>=expectedBehavior[3]-tol)
-    
-
-    pg0=1/2*(1+E000-E001)
-    pg1=1/2*(1+E110-E111)
-    setNumericalPrecisionForSolver(prob, precision=1e-8)
-
-    prob.set_objective('max',pg0)#h*(pg0+pg1))
-    prob.solve(solver = "mosek", verbosity = False)
-    return prob.value """
-
 # Guessing probability for a separable initial state (Ref. [23])
-def ComputeGuessingProbability(w0Avg, w1Avg, w0Peak, w1Peak, nonEABellValue, precision):
+def ComputeGuessingProbability(w0Avg, w1Avg, w0Peak, w1Peak, nonEABellValue):
     """
     Computes Eve's optimal guessing probability (Eq. 8) for a separable
     initial state under an average energy constraint.
@@ -405,8 +341,6 @@ def ComputeGuessingProbability(w0Avg, w1Avg, w0Peak, w1Peak, nonEABellValue, pre
         Peak energy values for inputs x = 0 and x = 1.
     nonEABellValue : float
         Classical (non-entanglement-assisted) Bell inequality value.
-    precision : float
-        Numerical precision used for solver tolerances.
 
     Returns
     -------
@@ -454,13 +388,15 @@ def ComputeGuessingProbability(w0Avg, w1Avg, w0Peak, w1Peak, nonEABellValue, pre
     prob.set_objective("max", pg0)
 
     # --- Set solver precision and solve ---
-    setNumericalPrecisionForSolver(prob, precision)
+    setNumericalPrecisionForSolver(prob)
     prob.solve(solver="mosek", verbosity=False)
 
     return prob.value
 
 
-def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue, precision):
+# Seesaw in which we fix the measurement and optimize
+# over the states to maximize P_guess (Eq. 8)
+def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue):
     """
     Solve for the optimal states maximizing the guessing probability P_guess
     given a fixed measurement.
@@ -472,7 +408,6 @@ def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue,
         measurement (list): List of measurement operators [PiSA0, PiSA1].
         ground (np.ndarray): Ground state projector.
         nonEABellValue (float): Lower bound from the separable strategy.
-        precision (float): Desired solver precision (e.g., 1e-6).
 
     Returns:
         tuple:
@@ -523,7 +458,7 @@ def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue,
     problem.set_objective("max", objective)
 
     # Solver precision
-    setNumericalPrecisionForSolver(problem, precision)
+    setNumericalPrecisionForSolver(problem)
 
     # Solve the SDP
     problem.solve(solver="mosek", verbosity=0)
@@ -531,7 +466,9 @@ def findStatesGuessProb(dimS, dimM, w0, w1, measurement, ground, nonEABellValue,
     return problem.value, [np.matrix(rho.value_as_matrix) for rho in states]
 
 
-def findMeasurementGuessProb(dimS, dimM, states, nonEABellValue, precision):
+# Seesaw in which we fix the state and optimize
+# over the measurement to maximize P_guess (Eq. 8)
+def findMeasurementGuessProb(dimS, dimM, states, nonEABellValue):
     """
     Solve for the optimal measurement maximizing P_guess given fixed states.
 
@@ -540,7 +477,6 @@ def findMeasurementGuessProb(dimS, dimM, states, nonEABellValue, precision):
         dimM (int): Dimension of the memory M.
         states (list): List of prepared states from findStatesGuessProb().
         nonEABellValue (float): Bell-type constraint value.
-        precision (float): Desired solver precision (e.g., 1e-6).
 
     Returns:
         tuple:
@@ -575,7 +511,7 @@ def findMeasurementGuessProb(dimS, dimM, states, nonEABellValue, precision):
     problem.set_objective("max", objective)
 
     # Solver precision
-    setNumericalPrecisionForSolver(problem, precision)
+    setNumericalPrecisionForSolver(problem)
 
     # Solve the SDP
     problem.solve(solver="mosek", verbosity=0)
@@ -590,64 +526,132 @@ def findMeasurementGuessProb(dimS, dimM, states, nonEABellValue, precision):
 # Utilities to compute the maximal violation achievable by deterministic
 # behaviours, as defined in Eq. (13).
 # ----------------------------------------------------------------------
-def findMeasurementMinViolDet(dimS, dimM, states, precision):
-    
+
+# Seesaw iteration where the states are fixed and the measurement
+# is optimized to maximize deterministic behaviours (entanglement allowed, Eq. 13)
+def findMeasurementMinViolDet(dimS, dimM, states):
+    """
+    Optimize the measurement operators {Pi_SA^0, Pi_SA^1} that minimize the
+    deterministic violation (Eq. 13) for given bipartite states.
+
+    Parameters
+    ----------
+    dimS : int
+        Dimension of subsystem S.
+    dimM : int
+        Dimension of subsystem M (measurement system).
+    states : list of np.ndarray
+        List [sigma_SA^0, sigma_SA^1] of density matrices.
+
+    Returns
+    -------
+    measurement : list of np.ndarray
+        Optimal measurement [Pi_SA^0, Pi_SA^1].
+    """
+    sigmaSA0, sigmaSA1 = states
+    dim_total = dimS * dimM
+
     problem = Problem()
-    PiSA0=pic.HermitianVariable('PiSA0',shape=(dimS*dimM,dimS*dimM))
-    PiSA1=pic.HermitianVariable('PiSA1',shape=(dimS*dimM,dimS*dimM))
 
-    sigmaSA0=states[0]
-    sigmaSA1=states[1]
+    # Define measurement operators
+    PiSA0 = pic.HermitianVariable('PiSA0', shape=(dim_total, dim_total))
+    PiSA1 = pic.HermitianVariable('PiSA1', shape=(dim_total, dim_total))
 
-    problem.add_constraint(PiSA0>>0)
-    problem.add_constraint(PiSA1>>0)
-    problem.add_constraint(PiSA0+PiSA1==np.eye(dimS*dimM))
-    problem.add_constraint(pic.trace(sigmaSA0*PiSA0)==1)
+    # Measurement constraints
+    problem.add_constraint(PiSA0 >> 0)
+    problem.add_constraint(PiSA1 >> 0)
+    problem.add_constraint(PiSA0 + PiSA1 == np.eye(dim_total))
 
-    
-    objective=pic.trace(sigmaSA1*PiSA0)-pic.trace(sigmaSA1*PiSA1)
+    # Deterministic behaviour constraint
+    problem.add_constraint(pic.trace(sigmaSA0 * PiSA0) == 1)
 
-    
-    problem.set_objective("min",objective)
-    setNumericalPrecisionForSolver(problem, precision)
-    
-    problem.solve()
-    
-    firstEffect = np.matrix(PiSA0.value_as_matrix)
-    measurement = [firstEffect,np.eye(dimS*dimM)-firstEffect]
-  
+    # Objective: minimize difference of expectation values
+    objective = pic.trace(sigmaSA1 * PiSA0) - pic.trace(sigmaSA1 * PiSA1)
+    problem.set_objective("min", objective)
+
+    # Solver precision settings
+    setNumericalPrecisionForSolver(problem)
+    problem.solve(verbosity=False)
+
+    # Extract optimal measurement
+    PiSA0_opt = np.matrix(PiSA0.value_as_matrix)
+    measurement = [PiSA0_opt, np.eye(dim_total) - PiSA0_opt]
+
     return measurement
 
-def findStateMinViolDet(dimS,dimM,w0,w1,measurement,ground, precision):
-    
-    PiSA0 = measurement[0]
-    PiSA1 = measurement[1]
-    
+
+# Seesaw iteration where the measurement is fixed and the states
+# are optimized to maximize deterministic behaviours (entanglement allowed, Eq. 13)
+def findStateMinViolDet(dimS, dimM, w0, w1, measurement, ground):
+    """
+    Optimize the bipartite states {sigma_SA^0, sigma_SA^1} that minimize the
+    deterministic violation (Eq. 13) for fixed measurement operators.
+
+    Parameters
+    ----------
+    dimS : int
+        Dimension of subsystem S.
+    dimM : int
+        Dimension of subsystem M.
+    w0, w1 : float
+        Energy deviation tolerances for sigma_SA^0 and sigma_SA^1, respectively.
+    measurement : list of np.ndarray
+        Measurement operators [Pi_SA^0, Pi_SA^1].
+    ground : np.ndarray
+        Ground state density matrix on subsystem S.
+
+    Returns
+    -------
+    value : float
+        Optimal objective value (minimal deterministic violation).
+    states : list of np.ndarray
+        Optimal states [sigma_SA^0, sigma_SA^1].
+    """
+    PiSA0, PiSA1 = measurement
+    dim_total = dimS * dimM
+
     problem = Problem()
 
-    states=[pic.HermitianVariable('phi_'+str(a),shape=(dimS*dimM,dimS*dimM)) for a in range(2)]
-    problem.add_list_of_constraints([aState>>0 for aState in states])
-    problem.add_list_of_constraints([pic.trace(aState)==1 for aState in states])
-    
-    sigmaSA0=states[0]
-    sigmaSA1=states[1]
-    
-    "Marginal's on A of the states sigma_{SA}^x should be equal"
-    problem.add_constraint(pic.partial_trace(sigmaSA0,0,[dimS,dimM])==pic.partial_trace(sigmaSA1,0,[dimS,dimM]))
-    
-    "Overlap with groundstate should be large"
-    problem.add_constraint(pic.trace(np.kron(ground,np.eye(dimM))*sigmaSA0)>=1-w0)
-    problem.add_constraint(pic.trace(np.kron(ground,np.eye(dimM))*sigmaSA1)>=1-w1)
-    problem.add_constraint(pic.trace(sigmaSA0*PiSA0)==1)
+    # Define state variables
+    sigmaSA = [
+        pic.HermitianVariable(f'sigmaSA{a}', shape=(dim_total, dim_total))
+        for a in range(2)
+    ]
 
-    objective=pic.trace(sigmaSA1*PiSA0)-pic.trace(sigmaSA1*PiSA1)
-    
-    problem.set_objective("min",objective)
-    setNumericalPrecisionForSolver(problem, precision)
-    
+    # Positivity and normalization
+    for rho in sigmaSA:
+        problem.add_constraint(rho >> 0)
+        problem.add_constraint(pic.trace(rho) == 1)
+
+    sigmaSA0, sigmaSA1 = sigmaSA
+
+    # Marginals on A (system index 0) must be equal
+    problem.add_constraint(
+        pic.partial_trace(sigmaSA0, 0, [dimS, dimM])
+        == pic.partial_trace(sigmaSA1, 0, [dimS, dimM])
+    )
+
+    # Energy constraints (overlap with ground state)
+    projector_ground = np.kron(ground, np.eye(dimM))
+    problem.add_constraint(pic.trace(projector_ground * sigmaSA0) >= 1 - w0)
+    problem.add_constraint(pic.trace(projector_ground * sigmaSA1) >= 1 - w1)
+
+    # Deterministic condition for sigma_SA^0
+    problem.add_constraint(pic.trace(sigmaSA0 * PiSA0) == 1)
+
+    # Objective function
+    objective = pic.trace(sigmaSA1 * PiSA0) - pic.trace(sigmaSA1 * PiSA1)
+    problem.set_objective("min", objective)
+
+    # Solver settings
+    setNumericalPrecisionForSolver(problem)
     problem.solve(verbosity=False)
-    
-    return problem.value, [np.matrix(aState.value_as_matrix) for aState in states]
+
+    # Extract results
+    opt_value = problem.value
+    opt_states = [np.matrix(rho.value_as_matrix) for rho in sigmaSA]
+
+    return opt_value, opt_states
     
 
 
@@ -700,7 +704,7 @@ def diamond_norm_distance(choi_E):
     prob.add_constraint(-dim * (I_d @ sigma) << Y)
     prob.add_constraint(Y << dim * (I_d @ sigma))
 
-    setNumericalPrecisionForSolver(prob, precision=1e-12)
+    setNumericalPrecisionForSolver(prob)
     prob.solve(solver="mosek")
 
     return 0.5 * prob.value, sigma.value

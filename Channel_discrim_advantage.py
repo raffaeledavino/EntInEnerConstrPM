@@ -20,7 +20,6 @@ if __name__ == "__main__":
 
     # Parameters
     energyrange = np.arange(0.01, 0.50, 0.01)
-    num_omega = 50
     p_values = np.linspace(0.00, 0.001, 2)
 
     # Prepare output directory
@@ -43,7 +42,6 @@ if __name__ == "__main__":
     b00, b01, b10, b11 = [qt.basis(4, i) for i in range(4)]
 
     for count, w in enumerate(tqdm(energyrange)):
-
         advantage = -np.inf
 
         for p in p_values:

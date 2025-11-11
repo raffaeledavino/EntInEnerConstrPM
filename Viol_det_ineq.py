@@ -21,11 +21,10 @@ if __name__ == "__main__":
     num_trials = 10             # Number of independent minimizations per w
     tol = 1e-8                  # Convergence threshold
     error = 1e-4
-    precisionopt = 1e-8         # Solver precision
 
 
     # Prepare Data directory
-    save = False  # Set to False if you don't want to save results
+    save = False                # Set to False if you don't want to save results
     output_file = "data_viol_det_ineq.txt"
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
@@ -67,7 +66,7 @@ if __name__ == "__main__":
 
                     # --- Seesaw optimization ---
                     newE1value, states = findStateMinViolDet(
-                        dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
+                        dimS, dimM, w0Avg, w1Avg, measurement, ground
                     )
                     oldE1value = 0
                     
@@ -80,10 +79,10 @@ if __name__ == "__main__":
                     ) and iters < max_iters:
                         oldE1value = newE1value
                         measurement = findMeasurementMinViolDet(
-                            dimS, dimM, states, precisionopt
+                            dimS, dimM, states
                         )
                         newE1value, states = findStateMinViolDet(
-                            dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
+                            dimS, dimM, w0Avg, w1Avg, measurement, ground
                         )
                         iters += 1
 

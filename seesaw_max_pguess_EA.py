@@ -16,12 +16,11 @@ if __name__ == "__main__":
     # Parameters
     energyrange = np.concatenate(([0.001], np.arange(0.01, 0.51, 0.01)))
     dim, dimM = 2, 3
-    num_trials = 10         # number of independent minimizations per w
+    num_trials = 10         # Number of independent minimizations per w
     tol = 1e-9              # Convergence threshold
-    precision = 1e-8        # solver precision
 
     # Prepare output directory
-    save = True  # Set to False if you don't want to save result
+    save = False            # Set to False if you don't want to save result
     output_file = 'data_avg_pg.txt'
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
@@ -38,9 +37,9 @@ if __name__ == "__main__":
 
         w0Avg, w1Avg = w, w
 
-        # --- Classical-correlated (non-entangled) part ---
-        nonEABellValue, _ = computeMaxIneqViolation(w0Avg, w1Avg, precision)
-        cPguess = ComputeGuessingProbability(w0Avg, w1Avg, 1, 1, nonEABellValue, precision)
+        # Classical-correlated (non-entangled) part
+        nonEABellValue, _ = computeMaxIneqViolation(w0Avg, w1Avg)
+        cPguess = ComputeGuessingProbability(w0Avg, w1Avg, 1, 1, nonEABellValue)
 
         qPguess_min = 0.0
         for attempt in range(num_trials):
@@ -62,10 +61,10 @@ if __name__ == "__main__":
                     error = 1e-4 if w < 0.06 else 1e-7
                     while newPguess - firstPguess > error:
                         firstPguess, states = findStatesGuessProb(
-                            dim, dimM, w0Avg, w1Avg, measurement, ground, nonEABellValue, precision
+                            dim, dimM, w0Avg, w1Avg, measurement, ground, nonEABellValue
                         )
                         newPguess, measurement = findMeasurementGuessProb(
-                            dim, dimM, states, nonEABellValue, precision
+                            dim, dimM, states, nonEABellValue
                         )
                     qPguess = newPguess
 
@@ -93,7 +92,7 @@ if __name__ == "__main__":
     # Plot results
     # ----------------------------------------------------------------------
     plot_min_entropy(
-        "Data/data_avg_pg.txt",   # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
+        results,   # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_pguess.png",
-        save=True
+        save=False
     )

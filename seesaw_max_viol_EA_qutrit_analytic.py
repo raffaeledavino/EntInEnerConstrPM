@@ -5,9 +5,10 @@ import os
 from utils import * 
 
 """
-Performs a seesaw optimization to find the maximum Bell-inequality violation
-(both entanglement-assisted and non-entanglement-assisted) for a range of
-energy parameters omega.
+Performs a seesaw optimization to find the maximum value of I_corr,
+as defined in Eq. (6), in the entanglement-assisted (EA) scenario with a qutrit memory M.
+The results are compared with both the non–entanglement-assisted (non-EA) scenario
+and the analytical results obtained for a qubit memory M, across a range of energy parameters omega.
 
 Results are saved to 'Data/data_viol_det_ineq.txt' as tuples
 (omega, non_EA, EA, EA_analytic), unless save=False is specified.
@@ -20,12 +21,10 @@ if __name__ == "__main__":
     dimS, dimM = 2, 3
     num_trials = 20        # number of independent minimizations per w
     tol = 1e-7               # Convergence threshold
-    precisionopt = 1e-12     # Solver precision
-
 
     # ----------------------------------------------------------------------
     # Load analytical data of the entanglement-assisted violation of I_corr
-    # (Appendix C)
+    # (computed in analytical_viol_EA_qubits.py)
     # ----------------------------------------------------------------------
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
@@ -40,7 +39,7 @@ if __name__ == "__main__":
     EAvalue_analytic = data_loaded[:, 2]
 
     # Prepare Data directory
-    save = True  # Set to False if you don't want to save results
+    save = False                # Set to False if you don't want to save results
     output_file = "data_EA_max_viol.txt"
     base_dir = os.path.dirname(__file__)
     data_dir = os.path.join(base_dir, "Data")
@@ -68,23 +67,21 @@ if __name__ == "__main__":
                 measurement = [PiSA0, np.kron(np.eye(dimS), np.eye(dimM)) - PiSA0]
                 ground = [[1, 0], [0, 0]]
 
-                # --- Step 1: optimize over states given initial measurement ---
+                # Step 1: optimize over states given initial measurement
                 newEAvalue, states = findStateMaxViolation(
-                    dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
+                    dimS, dimM, w0Avg, w1Avg, measurement, ground
                 )
 
                 oldEAvalue = 0
 
-                # ------------------------------------------------------------------
                 # Seesaw loop: alternate between optimizing measurement and states
-                # ------------------------------------------------------------------
                 while newEAvalue - oldEAvalue > tol:
                     oldEAvalue = newEAvalue
                     measurement = findMeasurementMaxViol(
-                        dimS, dimM, states, precisionopt
+                        dimS, dimM, states
                     )
                     newEAvalue, states = findStateMaxViolation(
-                        dimS, dimM, w0Avg, w1Avg, measurement, ground, precisionopt
+                        dimS, dimM, w0Avg, w1Avg, measurement, ground
                     )
 
                 success = True
@@ -99,10 +96,8 @@ if __name__ == "__main__":
                 f"Seesaw optimization failed for w = {w:.2f} after {num_trials} restarts."
             )
 
-        # ------------------------------------------------------------------
         # Compute non-entanglement-assisted (classical-correlated) value
-        # ------------------------------------------------------------------
-        nonEAvalue, _ = computeMaxIneqViolation(w0Avg, w1Avg, precisionopt)
+        nonEAvalue, _ = computeMaxIneqViolation(w0Avg, w1Avg)
 
         # Store results
         results.append((w0Avg, nonEAvalue, newEAvalue, ea_analytic_val))
@@ -133,5 +128,5 @@ if __name__ == "__main__":
     plot_EA_violation_qutrit_analytic(
         results,   # Use `results` to plot data from this run, or "Data/filename.txt" to plot previously saved data
         save_as="Fig_correlations_adv.png",
-        save=True
+        save=False
     )
