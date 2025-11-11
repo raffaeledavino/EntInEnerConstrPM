@@ -18,5 +18,5 @@ The GitHub repository is organized as follows:
 - `sympy` 1.12  
 - `matplotlib` 3.8.0
 
-
+## Paper link
 The code is associated with the following paper on arXiv: https://arxiv.org/abs/2510.27559.
