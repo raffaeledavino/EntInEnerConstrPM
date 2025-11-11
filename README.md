@@ -10,13 +10,14 @@ The GitHub repository is organized as follows:
 
 ## Library Requirements
 
-- `numpy` 1.26.4  
-- `qutip` 4.7.5  
-- `picos` 2.4.17  
-- `ncpol2sdpa` 1.12.2  
-- `tqdm` 4.65.0  
-- `sympy` 1.12  
 - `matplotlib` 3.8.0
+- `ncpol2sdpa` 1.12.2  
+- `numpy` 1.26.4   
+- `picos` 2.4.17
+- `qutip` 4.7.5 
+- `sympy` 1.12
+- `tqdm` 4.65.0
+
 
 ## Paper link
 The code is associated with the following paper on arXiv: https://arxiv.org/abs/2510.27559.
