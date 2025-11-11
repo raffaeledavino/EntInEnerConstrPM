@@ -9,4 +9,4 @@ The GitHub repository is organized as follows:
 6. **`utils.py`** – Contains all helper functions used across the other scripts.
 
 
-The code is associated with the following paper on arXiv: arXiv:2510.27559
+The code is associated with the following paper on arXiv: https://arxiv.org/abs/2510.27559
