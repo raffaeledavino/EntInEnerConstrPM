@@ -8,5 +8,15 @@ The GitHub repository is organized as follows:
 5. **`Channel_discr_advantage.py`** – Computes a lower bound on the advantage provided by entanglement without energy constraints in channel discrimination, as well as an upper bound for the advantage under energy constraints.  
 6. **`utils.py`** – Contains all helper functions used across the other scripts.
 
+## Library Requirements
 
-The code is associated with the following paper on arXiv: https://arxiv.org/abs/2510.27559
+- `numpy` 1.26.4  
+- `qutip` 4.7.5  
+- `picos` 2.4.17  
+- `ncpol2sdpa` 1.12.2  
+- `tqdm` 4.65.0  
+- `sympy` 1.12  
+- `matplotlib` 3.8.0
+
+
+The code is associated with the following paper on arXiv: https://arxiv.org/abs/2510.27559.
