@@ -11,10 +11,12 @@ The GitHub repository is organized as follows:
 ## Library Requirements
 
 - `matplotlib` 3.8.0
-- `ncpol2sdpa` 1.12.2  
+- `mosek` 10.2.0
+- `ncpol2sdpa` 1.12.2
 - `numpy` 1.26.4   
 - `picos` 2.4.17
-- `qutip` 4.7.5 
+- `qutip` 4.7.5
+- `scipy` 1.11.4 
 - `sympy` 1.12
 - `tqdm` 4.65.0
 
